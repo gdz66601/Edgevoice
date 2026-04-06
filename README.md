@@ -1,4 +1,6 @@
-# CFChat
+<div align="center">
+  <img src="edgechat.png" alt="CFChat Logo" />
+</div>
 
 [![GitHub Repo](https://img.shields.io/badge/GitHub-gdz66601%2FEdgechat-181717?logo=github)](https://github.com/gdz66601/Edgechat)
 [![License: GPL v3 or later](https://img.shields.io/badge/License-GPLv3%2B-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
