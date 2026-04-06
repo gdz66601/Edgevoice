@@ -368,12 +368,14 @@
   background: transparent;
   text-align: left;
   cursor: pointer;
-  /* 固定高度，防止激活态跳变 */
-  min-height: 70px;
+  /* 固定高度，避免内容多少导致列表项忽高忽低 */
+  min-height: 72px;
+  height: 72px;
   transition:
     background var(--transition-soft),
     border-color var(--transition-soft);
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .chat-list-item:hover {
