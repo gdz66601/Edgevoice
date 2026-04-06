@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="edgechat.png" alt="CFChat Logo" />
+  <img src="Edgechat.png" alt="CFChat Logo" />
 </div>
 
 [![GitHub Repo](https://img.shields.io/badge/GitHub-gdz66601%2FEdgechat-181717?logo=github)](https://github.com/gdz66601/Edgechat)
