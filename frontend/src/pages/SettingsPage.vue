@@ -3,6 +3,7 @@ import { computed, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '../api.js';
 import store from '../store.js';
+import UiButton from '../components/ui/Button.vue';
 
 const router = useRouter();
 const session = computed(() => store.session);
@@ -70,30 +71,36 @@ async function changePassword() {
     <div class="page-card">
       <header class="settings-header">
         <div>
-          <div class="title" style="font-size: 28px; margin-bottom: 4px">个人设置</div>
+          <div class="title">个人设置</div>
           <div class="muted">修改显示名称、头像和密码。</div>
         </div>
-        <button class="button secondary" @click="router.push('/')">返回聊天</button>
+        <UiButton variant="secondary" @click="router.push('/')">返回聊天</UiButton>
       </header>
 
-      <div style="padding: 24px" class="grid-two">
+      <div class="settings-body grid-two">
         <section class="panel">
-          <h3 style="margin-top: 0">个人资料</h3>
-          <div class="inline-actions" style="align-items: center; margin-bottom: 16px">
-            <img v-if="session?.avatarUrl" :src="session.avatarUrl" class="avatar" alt="avatar" />
-            <div v-else class="avatar"></div>
-            <input type="file" @change="uploadAvatar" />
+          <h3 class="panel-title">个人资料</h3>
+          <div class="avatar-row">
+            <img v-if="session?.avatarUrl" :src="session.avatarUrl" class="avatar avatar--profile" alt="avatar" />
+            <div v-else class="avatar avatar--profile"></div>
+            <div class="avatar-upload">
+              <input id="settings-avatar-upload" type="file" class="avatar-upload__input" @change="uploadAvatar" />
+              <label class="avatar-upload__button ui-button ui-button--secondary ui-button--sm" for="settings-avatar-upload">
+                更换头像
+              </label>
+              <span class="avatar-upload__note">支持图片文件，上传后会立即更新资料</span>
+            </div>
           </div>
 
           <label class="field">
             <span>显示名称</span>
             <input v-model.trim="profileForm.displayName" />
           </label>
-          <button class="button" @click="saveProfile">保存资料</button>
+          <UiButton @click="saveProfile">保存资料</UiButton>
         </section>
 
         <section class="panel">
-          <h3 style="margin-top: 0">修改密码</h3>
+          <h3 class="panel-title">修改密码</h3>
           <label class="field">
             <span>当前密码</span>
             <input v-model="passwordForm.currentPassword" type="password" />
@@ -102,11 +109,11 @@ async function changePassword() {
             <span>新密码</span>
             <input v-model="passwordForm.newPassword" type="password" />
           </label>
-          <button class="button" @click="changePassword">更新密码</button>
+          <UiButton @click="changePassword">更新密码</UiButton>
         </section>
       </div>
 
-      <div style="padding: 0 24px 24px">
+      <div class="settings-foot">
         <p v-if="info" class="tag">{{ info }}</p>
         <p v-if="error" class="error-text">{{ error }}</p>
       </div>

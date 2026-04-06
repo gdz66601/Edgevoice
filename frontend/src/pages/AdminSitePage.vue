@@ -86,7 +86,7 @@ onMounted(loadOverview);
 
       <section class="grid-two">
         <UiSurface class="panel">
-          <h3 style="margin-top: 0">创建官方群组</h3>
+          <h3 class="panel-title">创建官方群组</h3>
           <label class="field">
             <span>群组名称</span>
             <input v-model.trim="createChannelForm.name" />
@@ -106,7 +106,7 @@ onMounted(loadOverview);
         </UiSurface>
 
         <UiSurface class="panel">
-          <h3 style="margin-top: 0">后台入口说明</h3>
+          <h3 class="panel-title">后台入口说明</h3>
           <div class="stack">
             <div class="admin-note">
               <strong>用户管理</strong>

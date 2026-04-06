@@ -1,0 +1,177 @@
+.admin-window {
+  grid-template-columns: 300px minmax(0, 1fr);
+}
+
+.admin-sidebar {
+  gap: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.06)),
+    var(--surface-1);
+  backdrop-filter: var(--blur-md);
+  -webkit-backdrop-filter: var(--blur-md);
+}
+
+.admin-brand {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-nav {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.admin-nav__item {
+  width: 100%;
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  text-align: left;
+  border-radius: 20px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.18);
+  color: inherit;
+  transition:
+    transform var(--transition-soft),
+    border-color var(--transition-soft),
+    background var(--transition-soft),
+    box-shadow var(--transition-soft);
+}
+
+.admin-nav__item-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-nav__item span {
+  color: var(--text-soft);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.admin-nav__item:hover,
+.admin-nav__item--active {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.5);
+  background: linear-gradient(180deg, rgba(237, 245, 252, 0.5), rgba(230, 247, 245, 0.38));
+  box-shadow: var(--shadow-sm);
+}
+
+.admin-sidebar-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+}
+
+.admin-content {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.admin-section {
+  display: grid;
+  gap: 14px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.section-heading h1 {
+  font-size: clamp(1.9rem, 1.6vw + 1.4rem, 2.7rem);
+}
+
+.metric-card {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+}
+
+.metric-card__label {
+  color: var(--text-soft);
+  font-size: 0.88rem;
+}
+
+.stack {
+  display: grid;
+  gap: 18px;
+}
+
+.search-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-room-window {
+  width: min(1120px, 100%);
+  margin: 0 auto;
+  grid-template-rows: auto 1fr;
+}
+
+/* AdminRoomPage 顶栏：kicker + 标题 + 操作分列 */
+.admin-room-topbar {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.admin-room-topbar__kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  width: fit-content;
+}
+
+.admin-room-topbar__body {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-room-topbar__body h1 {
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.admin-room-topbar__body p {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.admin-room-topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 960px) {
+  .admin-window {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .search-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .section-heading {
+    flex-direction: column;
+  }
+}

@@ -16,17 +16,18 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: LoginPage,
-      meta: { public: true }
+      meta: { public: true, transition: 'page' }
     },
     {
       path: '/',
       name: 'chat',
-      component: ChatPage
+      component: ChatPage,
+      meta: { transition: 'page' }
     },
     {
       path: '/admin',
       component: AdminPage,
-      meta: { admin: true },
+      meta: { admin: true, transition: 'page' },
       children: [
         {
           path: '',
@@ -36,19 +37,19 @@ const router = createRouter({
           path: 'users',
           name: 'admin-users',
           component: AdminUsersPage,
-          meta: { admin: true }
+          meta: { admin: true, transition: 'page' }
         },
         {
           path: 'messages',
           name: 'admin-messages',
           component: AdminMessagesPage,
-          meta: { admin: true }
+          meta: { admin: true, transition: 'page' }
         },
         {
           path: 'site',
           name: 'admin-site',
           component: AdminSitePage,
-          meta: { admin: true }
+          meta: { admin: true, transition: 'page' }
         }
       ]
     },
@@ -56,12 +57,13 @@ const router = createRouter({
       path: '/admin/rooms/:kind/:roomId',
       name: 'admin-room',
       component: AdminRoomPage,
-      meta: { admin: true }
+      meta: { admin: true, transition: 'page' }
     },
     {
       path: '/settings',
       name: 'settings',
-      component: SettingsPage
+      component: SettingsPage,
+      meta: { transition: 'page' }
     }
   ]
 });

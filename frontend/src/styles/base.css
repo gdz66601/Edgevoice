@@ -1,0 +1,147 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+  margin: 0;
+}
+
+html {
+  background: var(--bg);
+}
+
+/* ===== 双色流体背景 ===== */
+
+/* 外层固定背景：奠定暖雾基底 */
+html {
+  background: var(--bg);
+}
+
+body {
+  position: relative;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(45, 156, 151, 0.2), transparent 32%),
+    radial-gradient(circle at 88% 16%, rgba(90, 143, 203, 0.2), transparent 34%),
+    radial-gradient(circle at 76% 88%, rgba(90, 143, 203, 0.14), transparent 30%),
+    radial-gradient(circle at 28% 72%, rgba(45, 156, 151, 0.12), transparent 26%),
+    linear-gradient(180deg, #eef5f9 0%, #e6eef4 100%);
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+
+/* 上层大尺寸流体光团：更大范围、更慢周期、更强阻尼 */
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  inset: auto;
+  pointer-events: none;
+  z-index: 0;
+  width: 65vw;
+  height: 65vw;
+  min-width: 480px;
+  min-height: 480px;
+  max-width: 800px;
+  max-height: 800px;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.55;
+  animation: float-orb-primary 22s cubic-bezier(0.37, 0, 0.63, 1) infinite alternate;
+}
+
+/* 青色光团：左上 → 对角右下 */
+body::before {
+  top: -20vw;
+  left: -10vw;
+  background: radial-gradient(circle, rgba(45, 156, 151, 0.34), rgba(45, 156, 151, 0.08) 70%, transparent);
+  animation-delay: -4s;
+}
+
+/* 蓝色光团：右下 → 对角左上 */
+body::after {
+  right: -14vw;
+  bottom: -18vw;
+  background: radial-gradient(circle, rgba(90, 143, 203, 0.3), rgba(90, 143, 203, 0.06) 70%, transparent);
+  animation-name: float-orb-secondary;
+  animation-duration: 26s;
+  animation-delay: -8s;
+}
+
+@keyframes float-orb-primary {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate3d(4vw, 6vw, 0) scale(1.06);
+  }
+
+  100% {
+    transform: translate3d(8vw, 3vw, 0) scale(1.02);
+  }
+}
+
+@keyframes float-orb-secondary {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate3d(-5vw, -4vw, 0) scale(1.04);
+  }
+
+  100% {
+    transform: translate3d(-9vw, -7vw, 0) scale(0.96);
+  }
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+#app {
+  position: relative;
+  z-index: 1;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+@keyframes float-orb {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  to {
+    transform: translate3d(2.5vw, 2vw, 0) scale(1.08);
+  }
+}

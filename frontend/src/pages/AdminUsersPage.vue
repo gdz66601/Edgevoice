@@ -89,7 +89,7 @@ onMounted(loadUsers);
 
       <section class="grid-two">
         <UiSurface class="panel">
-          <h3 style="margin-top: 0">创建用户</h3>
+          <h3 class="panel-title">创建用户</h3>
           <label class="field">
             <span>用户名</span>
             <input v-model.trim="createUserForm.username" />
@@ -106,7 +106,7 @@ onMounted(loadUsers);
         </UiSurface>
 
         <UiSurface class="panel">
-          <h3 style="margin-top: 0">使用说明</h3>
+          <h3 class="panel-title">使用说明</h3>
           <div class="stack">
             <div class="admin-note">
               <strong>禁用账号</strong>
@@ -125,7 +125,7 @@ onMounted(loadUsers);
       </section>
 
       <UiSurface class="panel">
-        <h3 style="margin-top: 0">用户列表</h3>
+        <h3 class="panel-title">用户列表</h3>
         <table class="list-table">
           <thead>
             <tr>

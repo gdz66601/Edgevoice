@@ -1,0 +1,384 @@
+.page-shell {
+  min-height: 100vh;
+  padding: var(--page-padding);
+}
+
+.app-window {
+  width: min(1440px, 100%);
+  min-height: calc(100vh - var(--page-padding) * 2);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  overflow: hidden;
+  border-radius: var(--radius-window);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  background:
+    linear-gradient(135deg, rgba(247, 250, 253, 0.38), rgba(247, 250, 253, 0.14)),
+    repeating-linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.04) 0,
+      rgba(255, 255, 255, 0.04) 1px,
+      transparent 1px,
+      transparent 10px
+    ),
+    var(--surface-0);
+  box-shadow:
+    var(--shadow-lg),
+    0 0 0 1px rgba(255, 255, 255, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -1px 2px rgba(88, 107, 124, 0.06);
+  backdrop-filter: var(--blur-lg);
+  -webkit-backdrop-filter: var(--blur-lg);
+  position: relative;
+}
+
+/* 玻璃容器顶部高光折射线 */
+.app-window::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent);
+  pointer-events: none;
+  z-index: 10;
+}
+
+.app-window--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.app-window--auth {
+  width: min(520px, 100%);
+  min-height: auto;
+  display: block;
+}
+
+.app-sidebar {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 14px;
+  padding: 18px 16px 16px;
+  border-right: 1px solid var(--line-soft);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.08)),
+    var(--surface-1);
+}
+
+.app-main,
+.admin-content {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.06)),
+    transparent;
+}
+
+.window-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--line-soft);
+  backdrop-filter: var(--blur-md);
+}
+
+.window-topbar--sticky {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
+.window-controls,
+.status-row,
+.hero-actions,
+.inline-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.window-controls__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.window-controls__dot--warm {
+  background: rgba(90, 143, 203, 0.72);
+}
+
+.window-controls__dot--danger {
+  background: rgba(173, 75, 64, 0.72);
+}
+
+.window-controls__dot--cool {
+  background: rgba(45, 156, 151, 0.7);
+}
+
+.window-heading,
+.hero-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.window-heading h1,
+.section-heading h1,
+.hero-copy h1 {
+  margin: 0;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.window-heading h1 {
+  font-size: 1.45rem;
+}
+
+.window-heading p,
+.section-heading p,
+.hero-copy p,
+.muted,
+.list-note,
+.summary-label {
+  margin: 0;
+  color: var(--text-soft);
+  line-height: 1.6;
+}
+
+.admin-section {
+  padding-bottom: 24px;
+}
+
+.content-scroll {
+  min-height: 0;
+  overflow: auto;
+}
+
+/* 单窗口设置页：content 需要可滚动 */
+.app-window--single .content-scroll {
+  flex: 1 1 auto;
+  display: block;
+}
+
+.heading-sm {
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.content-area,
+.stack,
+.form-stack,
+.glass-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.content-area {
+  padding: 24px;
+}
+
+.content-area--wide {
+  padding: 28px;
+}
+
+.hero-panel,
+.form-shell,
+.empty-state {
+  padding: 24px;
+}
+
+.hero-panel {
+  gap: 14px;
+}
+
+.hero-kicker,
+.section-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.48);
+  color: var(--text-soft);
+  font-size: 0.82rem;
+}
+
+.hero-copy {
+  max-width: 640px;
+}
+
+.hero-copy h1 {
+  font-size: clamp(2rem, 2vw + 1.4rem, 3.2rem);
+}
+
+.glass-grid--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.glass-grid--metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field-label {
+  font-size: 0.9rem;
+  color: var(--text-soft);
+}
+
+.info-banner,
+.error-banner {
+  padding: 12px 14px;
+  border-radius: var(--radius-control);
+  border: 1px solid transparent;
+  backdrop-filter: var(--blur-md);
+}
+
+.info-banner {
+  background: rgba(45, 156, 151, 0.12);
+  border-color: rgba(45, 156, 151, 0.18);
+  color: var(--cool);
+}
+
+.error-banner {
+  background: rgba(173, 75, 64, 0.12);
+  border-color: rgba(173, 75, 64, 0.18);
+  color: var(--danger);
+}
+
+.glass-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.glass-table tbody tr {
+  transition: background var(--transition-soft);
+}
+
+.glass-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.glass-table th,
+.glass-table td {
+  padding: 14px 0;
+  text-align: left;
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: top;
+}
+
+.glass-table th {
+  color: var(--text-faint);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.glass-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.status-row {
+  justify-content: space-between;
+}
+
+.summary-value {
+  font-size: clamp(1.6rem, 1.8vw, 2.3rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+.empty-state {
+  text-align: center;
+  color: var(--text-soft);
+}
+
+/* 居中布局：LoginPage / SettingsPage 通用 */
+.page-shell--center {
+  display: grid;
+  place-items: center;
+}
+
+@media (max-width: 1120px) {
+  .glass-grid--metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* 小号标题：适配 admin 卡片内的 .window-heading h1 */
+.heading-sm {
+  font-size: 1.15rem;
+  margin: 0;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+/* 中号描述：配合 heading-sm 的说明文字 */
+.description-sm {
+  margin: 0;
+  color: var(--text-soft);
+  line-height: 1.55;
+  font-size: 0.88rem;
+}
+
+/* 头像上传行 */
+.avatar-upload {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+@media (max-width: 960px) {
+  .page-shell {
+    padding: 12px;
+  }
+
+  .app-window {
+    min-height: calc(100vh - 24px);
+    grid-template-columns: minmax(0, 1fr);
+    border-radius: 26px;
+  }
+
+  .app-window--auth {
+    min-height: auto;
+  }
+
+  .app-sidebar {
+    border-right: none;
+    border-bottom: 1px solid var(--line-soft);
+    padding: 18px;
+  }
+
+  .window-topbar,
+  .content-area,
+  .content-area--wide,
+  .hero-panel,
+  .form-shell,
+  .empty-state {
+    padding: 16px;
+  }
+
+  .chat-message-scroll {
+    padding: 16px 20px 8px;
+  }
+
+  .chat-composer-shell {
+    padding: 12px 20px 16px;
+  }
+
+  .glass-grid--two,
+  .glass-grid--metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

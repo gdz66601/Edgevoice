@@ -74,7 +74,7 @@ onMounted(loadAll);
       <p v-if="loading" class="muted">消息索引与会话数据加载中...</p>
 
       <UiSurface class="panel">
-        <h3 style="margin-top: 0">消息搜索</h3>
+        <h3 class="panel-title">消息搜索</h3>
         <div class="search-grid">
           <label class="field">
             <span>关键词</span>
@@ -134,7 +134,7 @@ onMounted(loadAll);
 
       <section class="grid-two">
         <UiSurface class="panel">
-          <h3 style="margin-top: 0">群组列表</h3>
+          <h3 class="panel-title">群组列表</h3>
           <table class="list-table">
             <thead>
               <tr>
@@ -173,7 +173,7 @@ onMounted(loadAll);
         </UiSurface>
 
         <UiSurface class="panel">
-          <h3 style="margin-top: 0">私信列表</h3>
+          <h3 class="panel-title">私信列表</h3>
           <table class="list-table">
             <thead>
               <tr>
