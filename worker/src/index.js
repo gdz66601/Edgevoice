@@ -10,7 +10,7 @@ import { registerMessageRoutes } from './api/messages.js';
 import { registerUploadRoutes } from './api/upload.js';
 import { ChannelRoom } from './do/ChannelRoom.js';
 import { Scheduler } from './do/Scheduler.js';
-import { errorResponse, parseJsonRequest } from './utils.js';
+import { errorResponse, parseJsonRequest, publicFileUrl } from './utils.js';
 
 const app = new Hono();
 
@@ -299,6 +299,7 @@ app.get('/api/bootstrap', async (c) => {
          c.id,
          c.name,
          c.description,
+         c.avatar_key,
          c.kind,
          owner.display_name AS owner_display_name,
          EXISTS (
@@ -377,6 +378,8 @@ app.get('/api/bootstrap', async (c) => {
       id: Number(row.id),
       name: row.name,
       description: row.description,
+      avatarKey: row.avatar_key || '',
+      avatarUrl: row.avatar_key ? publicFileUrl(row.avatar_key) : '',
       kind: row.kind,
       ownerDisplayName: row.owner_display_name || '',
       isMember: Boolean(Number(row.is_member)),

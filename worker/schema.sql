@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS channels (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL UNIQUE,
   description TEXT NOT NULL DEFAULT '',
+  avatar_key TEXT,
   kind TEXT NOT NULL CHECK (kind IN ('public', 'private', 'dm')),
   dm_key TEXT UNIQUE,
   created_by INTEGER,

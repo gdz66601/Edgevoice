@@ -5,13 +5,15 @@ import {
   listChannelMembers,
   requireAccessibleRoom
 } from '../db.js';
-import { errorResponse, parseJsonRequest } from '../utils.js';
+import { errorResponse, parseJsonRequest, publicFileUrl } from '../utils.js';
 
 function mapChannelRow(row) {
   return {
     id: Number(row.id),
     name: row.name,
     description: row.description,
+    avatarKey: row.avatar_key || '',
+    avatarUrl: row.avatar_key ? publicFileUrl(row.avatar_key) : '',
     kind: row.kind,
     ownerDisplayName: row.owner_display_name || '',
     isMember: Boolean(Number(row.is_member)),
@@ -60,6 +62,7 @@ export function registerChannelRoutes(app) {
          c.id,
          c.name,
          c.description,
+         c.avatar_key,
          c.kind,
          owner.display_name AS owner_display_name,
          EXISTS (
@@ -167,6 +170,8 @@ export function registerChannelRoutes(app) {
         id: channelId,
         name,
         description,
+        avatarKey: '',
+        avatarUrl: '',
         kind,
         ownerDisplayName: session.displayName,
         isMember: true,
@@ -225,11 +230,82 @@ export function registerChannelRoutes(app) {
         id: Number(channel.id),
         name: channel.name,
         description: channel.description,
+        avatarKey: channel.avatar_key || '',
+        avatarUrl: channel.avatar_key ? publicFileUrl(channel.avatar_key) : '',
         kind: channel.kind,
         myRole: membership?.role || '',
         canManage: session.isAdmin || membership?.role === 'owner'
       },
       members
+    });
+  });
+
+  app.patch('/api/channels/:channelId', async (c) => {
+    const session = c.get('session');
+    const channelId = Number(c.req.param('channelId'));
+    if (!Number.isFinite(channelId)) {
+      return errorResponse('群组不存在', 404);
+    }
+
+    const payload = await parseJsonRequest(c.req.raw);
+    const name =
+      payload.name === undefined ? undefined : String(payload.name || '').trim();
+    const avatarKey =
+      payload.avatarKey === undefined
+        ? undefined
+        : payload.avatarKey
+          ? String(payload.avatarKey)
+          : null;
+
+    if (name !== undefined && !name) {
+      return errorResponse('群组名称不能为空');
+    }
+
+    const management = await canManageChannel(c.env.DB, channelId, session.userId, session.isAdmin);
+    if (!management) {
+      return errorResponse('只有群主或管理员可以编辑群组', 403);
+    }
+
+    const updates = [];
+    const binds = [];
+    if (name !== undefined) {
+      updates.push('name = ?');
+      binds.push(name);
+    }
+    if (avatarKey !== undefined) {
+      updates.push('avatar_key = ?');
+      binds.push(avatarKey);
+    }
+
+    if (!updates.length) {
+      return c.json({ ok: true });
+    }
+
+    try {
+      await c.env.DB.prepare(
+        `UPDATE channels
+         SET ${updates.join(', ')}
+         WHERE id = ?
+           AND kind IN ('public', 'private')
+           AND deleted_at IS NULL`
+      )
+        .bind(...binds, channelId)
+        .run();
+    } catch (error) {
+      if (String(error.message).includes('UNIQUE')) {
+        return errorResponse('群组名称已存在');
+      }
+      throw error;
+    }
+
+    const updated = await getChannelById(c.env.DB, channelId);
+    return c.json({
+      channel: {
+        id: Number(updated.id),
+        name: updated.name,
+        avatarKey: updated.avatar_key || '',
+        avatarUrl: updated.avatar_key ? publicFileUrl(updated.avatar_key) : ''
+      }
     });
   });
 
@@ -323,6 +399,7 @@ export function registerChannelRoutes(app) {
          c.id,
          c.name,
          c.description,
+         c.avatar_key,
          c.kind,
          c.created_at,
          owner.display_name AS owner_display_name,
@@ -348,6 +425,8 @@ export function registerChannelRoutes(app) {
         id: Number(row.id),
         name: row.name,
         description: row.description,
+        avatarKey: row.avatar_key || '',
+        avatarUrl: row.avatar_key ? publicFileUrl(row.avatar_key) : '',
         kind: row.kind,
         createdAt: row.created_at,
         ownerDisplayName: row.owner_display_name || '未知',
