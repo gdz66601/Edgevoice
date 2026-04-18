@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS users (
   avatar_key TEXT,
   registration_invite_id INTEGER UNIQUE,
   is_disabled INTEGER NOT NULL DEFAULT 0,
+  is_admin INTEGER NOT NULL DEFAULT 0,
+  session_version INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   deleted_at TEXT

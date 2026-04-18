@@ -1,6 +1,5 @@
-import { parseAdminUsernames } from './utils.js';
-
 const encoder = new TextEncoder();
+export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
 function toBase64Url(bytes) {
   const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join('');
@@ -46,8 +45,15 @@ export async function verifyPassword(password, passwordHash, passwordSalt) {
   return derived.hash === passwordHash;
 }
 
-export function isAdminUser(env, username) {
-  return parseAdminUsernames(env.ADMIN_USERNAMES).includes(String(username).toLowerCase());
+function toSessionVersion(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+export async function putSession(env, session) {
+  await env.SESSIONS.put(session.token, JSON.stringify(session), {
+    expirationTtl: SESSION_TTL_SECONDS
+  });
 }
 
 export async function createSession(env, user) {
@@ -58,12 +64,11 @@ export async function createSession(env, user) {
     username: user.username,
     displayName: user.display_name,
     avatarUrl: user.avatar_key ? `/files/${encodeURIComponent(user.avatar_key)}` : '',
-    isAdmin: isAdminUser(env, user.username)
+    isAdmin: Boolean(Number(user.is_admin)),
+    sessionVersion: toSessionVersion(user.session_version)
   };
 
-  await env.SESSIONS.put(token, JSON.stringify(session), {
-    expirationTtl: 60 * 60 * 24 * 7
-  });
+  await putSession(env, session);
 
   return session;
 }
@@ -80,6 +85,12 @@ export async function getSession(env, token) {
 
   const session = JSON.parse(raw);
   session.token = token;
+  if (session.sessionVersion === undefined) {
+    session.sessionVersion = 0;
+  }
+  if (session.isAdmin === undefined) {
+    session.isAdmin = false;
+  }
   return session;
 }
 

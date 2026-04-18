@@ -1,7 +1,15 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { createSession, deleteSession, getSession, hashPassword, verifyPassword } from './auth.js';
+import {
+  createSession,
+  deleteSession,
+  getSession,
+  hashPassword,
+  putSession,
+  verifyPassword
+} from './auth.js';
 import { getSiteSettings, getUserByUsername } from './db.js';
+import { ApiError } from './errors.js';
 import { adminMiddleware, authMiddleware } from './middleware.js';
 import { registerAdminRoutes } from './api/admin.js';
 import { registerChannelRoutes } from './api/channels.js';
@@ -99,7 +107,7 @@ app.post('/api/register-links/:token/register', async (c) => {
     .run()
     .catch((error) => {
       if (String(error.message).includes('UNIQUE')) {
-        throw new Error('用户名已存在或注册链接已被使用');
+        throw new ApiError('用户名已存在或注册链接已被使用');
       }
       throw error;
     });
@@ -167,9 +175,7 @@ app.get('/api/auth/session', async (c) => {
     displayName: user.results[0].display_name,
     avatarUrl: user.results[0].avatar_key ? `/files/${encodeURIComponent(user.results[0].avatar_key)}` : ''
   };
-  await c.env.SESSIONS.put(session.token, JSON.stringify(freshSession), {
-    expirationTtl: 60 * 60 * 24 * 7
-  });
+  await putSession(c.env, freshSession);
 
   return c.json({ session: freshSession });
 });
@@ -216,12 +222,20 @@ app.post('/api/auth/change-password', async (c) => {
   await c.env.DB.prepare(
     `UPDATE users
      SET password_hash = ?,
-         password_salt = ?,
-         updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?`
+          password_salt = ?,
+          session_version = session_version + 1,
+          updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?
+       AND deleted_at IS NULL`
   )
     .bind(hashed.hash, hashed.salt, session.userId)
     .run();
+
+  const nextSession = {
+    ...session,
+    sessionVersion: Number(session.sessionVersion || 0) + 1
+  };
+  await putSession(c.env, nextSession);
 
   return c.json({ ok: true });
 });
@@ -251,9 +265,7 @@ app.patch('/api/me/profile', async (c) => {
     displayName,
     avatarUrl: avatarKey ? `/files/${encodeURIComponent(avatarKey)}` : nextSession.avatarUrl
   };
-  await c.env.SESSIONS.put(session.token, JSON.stringify(merged), {
-    expirationTtl: 60 * 60 * 24 * 7
-  });
+  await putSession(c.env, merged);
 
   return c.json({ session: merged });
 });
@@ -432,7 +444,13 @@ app.notFound(async (c) => {
   return new Response('Not Found', { status: 404 });
 });
 
-app.onError((error) => errorResponse(error.message || '服务器开小差了', 500));
+app.onError((error) => {
+  console.error(error);
+  if (error instanceof ApiError) {
+    return errorResponse(error.message, error.status);
+  }
+  return errorResponse('服务器开小差了', 500);
+});
 
 async function cleanupExpiredMessages(env) {
   const retentionDays = Number(env.MESSAGE_RETENTION_DAYS || 7);

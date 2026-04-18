@@ -1,5 +1,5 @@
-import { getSession } from './auth.js';
 import { errorResponse } from './utils.js';
+import { validateSession } from './session.js';
 
 function extractToken(request) {
   const authHeader = request.headers.get('authorization') || '';
@@ -13,12 +13,12 @@ function extractToken(request) {
 
 export async function authMiddleware(c, next) {
   const token = extractToken(c.req.raw);
-  const session = await getSession(c.env, token);
-  if (!session) {
-    return errorResponse('请先登录', 401);
+  const result = await validateSession(c.env, token);
+  if (!result.ok) {
+    return errorResponse(result.message, result.status);
   }
 
-  c.set('session', session);
+  c.set('session', result.session);
   await next();
 }
 

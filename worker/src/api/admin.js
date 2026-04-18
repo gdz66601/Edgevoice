@@ -1,5 +1,6 @@
 import { hashPassword } from '../auth.js';
 import { getSiteSettings, listMessages, requireAccessibleRoom, updateSiteSettings } from '../db.js';
+import { ApiError } from '../errors.js';
 import { errorResponse, parseJsonRequest, randomToken, sanitizeLimit } from '../utils.js';
 
 export function registerAdminRoutes(app) {
@@ -247,7 +248,7 @@ export function registerAdminRoutes(app) {
       .run()
       .catch((error) => {
         if (String(error.message).includes('UNIQUE')) {
-          throw new Error('用户名已存在');
+          throw new ApiError('用户名已存在');
         }
         throw error;
       });
@@ -265,15 +266,18 @@ export function registerAdminRoutes(app) {
   app.patch('/api/admin/users/:userId', async (c) => {
     const userId = Number(c.req.param('userId'));
     const payload = await parseJsonRequest(c.req.raw);
+    const isDisabled = payload.isDisabled ? 1 : 0;
+    const bumpVersion = isDisabled ? 1 : 0;
     await c.env.DB.prepare(
       `UPDATE users
        SET is_disabled = ?,
            display_name = COALESCE(?, display_name),
+           session_version = session_version + ?,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = ?
          AND deleted_at IS NULL`
     )
-      .bind(payload.isDisabled ? 1 : 0, payload.displayName || null, userId)
+      .bind(isDisabled, payload.displayName || null, bumpVersion, userId)
       .run();
 
     return c.json({ ok: true });
@@ -291,8 +295,9 @@ export function registerAdminRoutes(app) {
     await c.env.DB.prepare(
       `UPDATE users
        SET password_hash = ?,
-           password_salt = ?,
-           updated_at = CURRENT_TIMESTAMP
+            password_salt = ?,
+            session_version = session_version + 1,
+            updated_at = CURRENT_TIMESTAMP
        WHERE id = ?
          AND deleted_at IS NULL`
     )
@@ -307,8 +312,9 @@ export function registerAdminRoutes(app) {
     await c.env.DB.prepare(
       `UPDATE users
        SET deleted_at = CURRENT_TIMESTAMP,
-           is_disabled = 1,
-           updated_at = CURRENT_TIMESTAMP
+            is_disabled = 1,
+            session_version = session_version + 1,
+            updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`
     )
       .bind(userId)
@@ -359,11 +365,11 @@ export function registerAdminRoutes(app) {
          u.display_name AS sender_display_name,
          u.username AS sender_username
        FROM messages m
-       JOIN channels c ON c.id = m.channel_id
-       JOIN users u ON u.id = m.sender_id
-       WHERE ${filters.join(' AND ')}
-       ORDER BY m.id DESC
-       LIMIT ?`
+        JOIN channels c ON c.id = m.channel_id
+        JOIN users u ON u.id = m.sender_id
+        WHERE ${filters.join(' AND ')}
+        ORDER BY m.id DESC
+        LIMIT ?`
     )
       .bind(...binds, limit)
       .all();

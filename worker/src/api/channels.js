@@ -5,6 +5,7 @@ import {
   listChannelMembers,
   requireAccessibleRoom
 } from '../db.js';
+import { ApiError } from '../errors.js';
 import { errorResponse, parseJsonRequest } from '../utils.js';
 
 function mapChannelRow(row) {
@@ -135,7 +136,7 @@ export function registerChannelRoutes(app) {
       .run()
       .catch((error) => {
         if (String(error.message).includes('UNIQUE')) {
-          throw new Error('群组名称已存在');
+          throw new ApiError('群组名称已存在');
         }
         throw error;
       });

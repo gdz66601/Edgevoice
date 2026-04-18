@@ -16,13 +16,6 @@ export function parseJsonRequest(request) {
   return request.json().catch(() => ({}));
 }
 
-export function parseAdminUsernames(value = '') {
-  return value
-    .split(',')
-    .map((item) => item.trim().toLowerCase())
-    .filter(Boolean);
-}
-
 export function sanitizeLimit(value, fallback = 30, max = 100) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -45,7 +38,7 @@ export function pickAttachment(payload) {
     name: String(payload.name),
     type: String(payload.type),
     size: Number(payload.size) || 0,
-    url: payload.url ? String(payload.url) : `/files/${encodeURIComponent(String(payload.key))}`
+    url: `/files/${encodeURIComponent(String(payload.key))}`
   };
 }
 

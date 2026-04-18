@@ -119,7 +119,6 @@ npm run deploy
 
 ```toml
 [vars]
-ADMIN_USERNAMES = "admin"
 MESSAGE_RETENTION_DAYS = "7"
 ALLOWED_FILE_TYPES = "image/,video/,application/pdf,text/"
 MAX_FILE_SIZE = "20971520"
@@ -127,10 +126,11 @@ MAX_FILE_SIZE = "20971520"
 
 含义：
 
-- `ADMIN_USERNAMES`：逗号分隔的管理员用户名
 - `MESSAGE_RETENTION_DAYS`：消息保留天数
 - `ALLOWED_FILE_TYPES`：允许上传的 MIME 前缀
 - `MAX_FILE_SIZE`：单文件大小上限，单位字节
+
+管理员身份通过数据库字段 `users.is_admin` 控制。
 
 ## 请求与成本优化
 
