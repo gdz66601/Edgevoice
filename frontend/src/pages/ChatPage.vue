@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '../api.js';
@@ -33,10 +33,14 @@ const fileInputEl = ref(null);
 const inviteUserId = ref('');
 const showQuickActions = ref(false);
 const quickActionMode = ref('');
-const showMemberPanel = ref(true);
+const showMemberPanel = ref(false);
 const isMobileViewport = ref(false);
 const mobileView = ref('list');
+
+const MEMBER_PANEL_RESTORE_DELAY = 240;
+
 let roomSocket = null;
+let memberPanelRestoreTimer = null;
 
 const createGroupForm = reactive({
   name: '',
@@ -61,6 +65,8 @@ const canManageActiveRoom = computed(
 const hasManageLayer = computed(() => Boolean(activeRoom.value && activeRoom.value.kind !== 'dm'));
 const showSidebarPane = computed(() => !isMobileViewport.value || mobileView.value === 'list');
 const showChatPane = computed(() => !isMobileViewport.value || mobileView.value === 'chat');
+const isInitialMessageLoading = computed(() => loading.value && messages.value.length === 0);
+const isLoadingOlderMessages = computed(() => loading.value && messages.value.length > 0);
 const chatAppClasses = computed(() => ({
   'chat-app--mobile-list': isMobileViewport.value && mobileView.value === 'list',
   'chat-app--mobile-chat': isMobileViewport.value && mobileView.value === 'chat'
@@ -211,6 +217,17 @@ function toggleMemberPanel() {
   showMemberPanel.value = !showMemberPanel.value;
 }
 
+function isChannelRoomKey(roomKey) {
+  return roomKey.startsWith('public:') || roomKey.startsWith('private:');
+}
+
+function clearMemberPanelRestoreTimer() {
+  if (memberPanelRestoreTimer) {
+    clearTimeout(memberPanelRestoreTimer);
+    memberPanelRestoreTimer = null;
+  }
+}
+
 function syncViewportState() {
   const nextIsMobile = window.innerWidth <= 960;
   if (nextIsMobile === isMobileViewport.value) {
@@ -223,7 +240,7 @@ function syncViewportState() {
     showMemberPanel.value = false;
   } else {
     mobileView.value = 'chat';
-    showMemberPanel.value = Boolean(activeRoom.value && activeRoom.value.kind !== 'dm');
+    showMemberPanel.value = false;
   }
 }
 
@@ -448,6 +465,10 @@ function clearAttachment() {
 }
 
 async function loadOlder() {
+  if (loading.value) {
+    return;
+  }
+
   const firstMessage = messages.value[0];
   if (!firstMessage) {
     return;
@@ -558,15 +579,28 @@ async function logout() {
   router.push('/login');
 }
 
-watch(activeRoomKey, async (roomKey) => {
+watch(activeRoomKey, async (roomKey, previousRoomKey) => {
+  clearMemberPanelRestoreTimer();
   if (!roomKey) {
     return;
   }
 
-  showMemberPanel.value = activeRoom.value?.kind !== 'dm' && !isMobileViewport.value;
+  const shouldRestorePanel =
+    showMemberPanel.value && isChannelRoomKey(previousRoomKey || '') && isChannelRoomKey(roomKey);
+
+  showMemberPanel.value = false;
   await loadMessages();
   await loadMembers();
   connectSocket();
+
+  if (shouldRestorePanel) {
+    memberPanelRestoreTimer = setTimeout(() => {
+      if (activeRoomKey.value === roomKey && hasManageLayer.value) {
+        showMemberPanel.value = true;
+      }
+      memberPanelRestoreTimer = null;
+    }, MEMBER_PANEL_RESTORE_DELAY);
+  }
 });
 
 onMounted(() => {
@@ -575,6 +609,7 @@ onMounted(() => {
   bootstrap();
 });
 onBeforeUnmount(() => {
+  clearMemberPanelRestoreTimer();
   window.removeEventListener('resize', syncViewportState);
   disconnectSocket();
 });
@@ -768,15 +803,17 @@ onBeforeUnmount(() => {
                   variant="secondary"
                   size="sm"
                   class="chat-stream__older"
+                  :disabled="isLoadingOlderMessages"
+                  :aria-busy="isLoadingOlderMessages ? 'true' : 'false'"
                   @click="loadOlder"
                 >
-                  加载更早消息
+                  {{ isLoadingOlderMessages ? '正在加载更早消息...' : '加载更早消息' }}
                 </UiButton>
 
                 <UiSurface v-if="!activeRoom" tone="muted" class="chat-empty">
                   从左侧会话列表中选择一个联系人或群组。
                 </UiSurface>
-                <UiSurface v-else-if="loading" tone="muted" class="chat-empty">
+                <UiSurface v-else-if="isInitialMessageLoading" tone="muted" class="chat-empty">
                   正在加载消息...
                 </UiSurface>
                 <UiSurface v-else-if="!messages.length" tone="muted" class="chat-empty">
@@ -824,52 +861,60 @@ onBeforeUnmount(() => {
 
               <label v-if="error" class="error-text chat-composer__error">{{ error }}</label>
 
-              <div class="chat-composer">
-                <div class="chat-composer__field">
-                  <input ref="fileInputEl" type="file" class="chat-composer__file" @change="uploadAttachment" />
+              <div class="chat-composer__field">
+                <input ref="fileInputEl" type="file" class="chat-composer__file" @change="uploadAttachment" />
 
-                  <UiButton variant="ghost" size="icon" :disabled="!activeRoom" @click="openFilePicker">
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path
-                        d="M12 5v14M5 12h14"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="1.8"
-                      />
-                    </svg>
-                  </UiButton>
+                <UiButton variant="ghost" size="icon" :disabled="!activeRoom" @click="openFilePicker">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M12 5v14M5 12h14"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="1.8"
+                    />
+                  </svg>
+                </UiButton>
 
-                  <UiTextarea
-                    v-model="composerText"
-                    class="chat-composer__input"
-                    auto-grow
-                    :max-height="220"
-                    rows="1"
-                    :disabled="!activeRoom"
-                    placeholder="输入消息，Enter 发送，Shift+Enter 换行"
-                    @keydown="handleComposerKeydown"
-                  />
+                <UiTextarea
+                  v-model="composerText"
+                  class="chat-composer__input"
+                  auto-grow
+                  :max-height="220"
+                  rows="1"
+                  :disabled="!activeRoom"
+                  placeholder="输入消息，Enter 发送，Shift+Enter 换行"
+                  @keydown="handleComposerKeydown"
+                />
 
-                  <UiButton
-                    variant="default"
-                    size="icon"
-                    :disabled="sending || !activeRoom"
-                    @click="sendMessage"
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path
-                        d="M4 12 20 4l-4 16-4.5-6L4 12Z"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="1.8"
-                      />
-                    </svg>
-                  </UiButton>
-                </div>
+                <UiButton
+                  variant="default"
+                  size="icon"
+                  class="chat-composer__send"
+                  aria-label="发送消息"
+                  :disabled="sending || !activeRoom"
+                  @click="sendMessage"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M5 12h12"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
+                    <path
+                      d="M13 6l6 6-6 6"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
+                  </svg>
+                </UiButton>
               </div>
             </footer>
           </div>

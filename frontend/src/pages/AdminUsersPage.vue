@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
 import api from '../api.js';
 import UiButton from '../components/ui/Button.vue';
@@ -67,11 +67,11 @@ onMounted(loadUsers);
 <template>
   <div class="admin-section">
     <header class="admin-section__header">
-      <div>
+      <div class="admin-section__heading">
         <h1>用户管理</h1>
         <p>统一处理站内账号的创建、状态控制和密码维护。</p>
       </div>
-      <div class="admin-metric-grid">
+      <div class="admin-metric-grid admin-metric-grid--compact">
         <UiSurface class="admin-metric-card">
           <strong>{{ users.length }}</strong>
           <span>总用户数</span>
@@ -87,7 +87,7 @@ onMounted(loadUsers);
       <p v-if="error" class="error-text">{{ error }}</p>
       <p v-if="loading" class="muted">用户数据加载中...</p>
 
-      <section class="grid-two">
+      <section class="admin-grid admin-grid--two">
         <UiSurface class="panel">
           <h3 class="panel-title">创建用户</h3>
           <label class="field">
@@ -126,35 +126,37 @@ onMounted(loadUsers);
 
       <UiSurface class="panel">
         <h3 class="panel-title">用户列表</h3>
-        <table class="list-table">
-          <thead>
-            <tr>
-              <th>用户</th>
-              <th>状态</th>
-              <th>创建时间</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="user in users" :key="user.id">
-              <td>
-                <strong>{{ user.displayName }}</strong>
-                <div class="muted">@{{ user.username }}</div>
-              </td>
-              <td>{{ user.isDisabled ? '已禁用' : '正常' }}</td>
-              <td>{{ new Date(user.createdAt).toLocaleString() }}</td>
-              <td>
-                <div class="inline-actions">
-                  <UiButton variant="secondary" size="sm" @click="toggleUser(user)">
-                    {{ user.isDisabled ? '启用' : '禁用' }}
-                  </UiButton>
-                  <UiButton variant="secondary" size="sm" @click="resetPassword(user)">重置密码</UiButton>
-                  <UiButton variant="destructive" size="sm" @click="removeUser(user)">删除</UiButton>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="admin-table-wrap">
+          <table class="list-table">
+            <thead>
+              <tr>
+                <th>用户</th>
+                <th>状态</th>
+                <th>创建时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="user in users" :key="user.id">
+                <td>
+                  <strong>{{ user.displayName }}</strong>
+                  <div class="muted">@{{ user.username }}</div>
+                </td>
+                <td>{{ user.isDisabled ? '已禁用' : '正常' }}</td>
+                <td>{{ new Date(user.createdAt).toLocaleString() }}</td>
+                <td>
+                  <div class="inline-actions">
+                    <UiButton variant="secondary" size="sm" @click="toggleUser(user)">
+                      {{ user.isDisabled ? '启用' : '禁用' }}
+                    </UiButton>
+                    <UiButton variant="secondary" size="sm" @click="resetPassword(user)">重置密码</UiButton>
+                    <UiButton variant="destructive" size="sm" @click="removeUser(user)">删除</UiButton>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </UiSurface>
     </div>
   </div>

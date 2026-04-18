@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import api from '../api.js';
@@ -73,20 +73,20 @@ onMounted(loadRoom);
 </script>
 
 <template>
-  <div class="page-shell chat-shell">
+  <div class="page-shell admin-page admin-room-page">
     <div class="admin-room-shell">
-      <header class="chat-stage__header admin-room__header">
-        <div>
+      <header class="admin-room-shell__header">
+        <div class="admin-room-shell__heading">
           <h1>{{ title }}</h1>
           <p>{{ kind === 'dm' ? '管理员私信查看页' : '管理员频道查看页' }}</p>
         </div>
-        <div class="inline-actions">
+        <div class="inline-actions admin-room-shell__actions">
           <UiBadge variant="secondary">{{ messages.length }} 条消息</UiBadge>
           <UiButton variant="secondary" @click="router.push('/admin')">返回后台</UiButton>
         </div>
       </header>
 
-      <section class="chat-stream admin-room__stream">
+      <section class="chat-stream admin-room-shell__stream">
         <div class="chat-stream__inner">
           <UiSurface v-if="loading" tone="muted" class="chat-empty">正在加载会话...</UiSurface>
           <UiSurface v-else-if="error" tone="muted" class="chat-empty">{{ error }}</UiSurface>

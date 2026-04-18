@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '../api.js';
@@ -62,7 +62,7 @@ onMounted(loadAll);
 <template>
   <div class="admin-section">
     <header class="admin-section__header">
-      <div>
+      <div class="admin-section__heading">
         <h1>消息查看</h1>
         <p>搜索全站消息，并进入任意群组或私信的完整会话页查看上下文。</p>
       </div>
@@ -75,7 +75,7 @@ onMounted(loadAll);
 
       <UiSurface class="panel">
         <h3 class="panel-title">消息搜索</h3>
-        <div class="search-grid">
+        <div class="search-grid admin-search-grid">
           <label class="field">
             <span>关键词</span>
             <input v-model.trim="searchForm.keyword" />
@@ -112,90 +112,96 @@ onMounted(loadAll);
           <UiButton @click="searchMessages">开始搜索</UiButton>
         </div>
 
-        <table v-if="searchResults.length" class="list-table">
-          <thead>
-            <tr>
-              <th>时间</th>
-              <th>发送者</th>
-              <th>会话</th>
-              <th>内容</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in searchResults" :key="item.id">
-              <td>{{ new Date(item.createdAt).toLocaleString() }}</td>
-              <td>{{ item.sender.displayName }}</td>
-              <td>{{ item.room.kind === 'dm' ? '私信' : '群组' }} · {{ item.room.name }}</td>
-              <td>{{ item.content || item.attachmentName }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </UiSurface>
-
-      <section class="grid-two">
-        <UiSurface class="panel">
-          <h3 class="panel-title">群组列表</h3>
+        <div v-if="searchResults.length" class="admin-table-wrap">
           <table class="list-table">
             <thead>
               <tr>
-                <th>群组</th>
-                <th>统计</th>
-                <th>操作</th>
+                <th>时间</th>
+                <th>发送者</th>
+                <th>会话</th>
+                <th>内容</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="channel in channels" :key="channel.id">
-                <td>
-                  <strong>{{ channel.name }}</strong>
-                  <div class="muted">
-                    {{ channel.kind === 'private' ? '私有群组' : '公开群组' }} · 群主 {{ channel.ownerDisplayName }}
-                  </div>
-                  <div class="muted">{{ channel.description || '无描述' }}</div>
-                </td>
-                <td>{{ channel.memberCount }} 人 / {{ channel.messageCount }} 条</td>
-                <td>
-                  <div class="inline-actions">
-                    <UiButton
-                      variant="secondary"
-                      size="sm"
-                      @click="openRoom(channel.kind, channel.id, channel.name)"
-                    >
-                      打开对话
-                    </UiButton>
-                    <UiButton variant="destructive" size="sm" @click="removeChannel(channel)">
-                      删除
-                    </UiButton>
-                  </div>
-                </td>
+              <tr v-for="item in searchResults" :key="item.id">
+                <td>{{ new Date(item.createdAt).toLocaleString() }}</td>
+                <td>{{ item.sender.displayName }}</td>
+                <td>{{ item.room.kind === 'dm' ? '私信' : '群组' }} · {{ item.room.name }}</td>
+                <td>{{ item.content || item.attachmentName }}</td>
               </tr>
             </tbody>
           </table>
+        </div>
+      </UiSurface>
+
+      <section class="admin-grid admin-grid--two">
+        <UiSurface class="panel">
+          <h3 class="panel-title">群组列表</h3>
+          <div class="admin-table-wrap">
+            <table class="list-table">
+              <thead>
+                <tr>
+                  <th>群组</th>
+                  <th>统计</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="channel in channels" :key="channel.id">
+                  <td>
+                    <strong>{{ channel.name }}</strong>
+                    <div class="muted">
+                      {{ channel.kind === 'private' ? '私有群组' : '公开群组' }} · 群主 {{ channel.ownerDisplayName }}
+                    </div>
+                    <div class="muted">{{ channel.description || '无描述' }}</div>
+                  </td>
+                  <td>{{ channel.memberCount }} 人 / {{ channel.messageCount }} 条</td>
+                  <td>
+                    <div class="inline-actions">
+                      <UiButton
+                        variant="secondary"
+                        size="sm"
+                        @click="openRoom(channel.kind, channel.id, channel.name)"
+                      >
+                        打开对话
+                      </UiButton>
+                      <UiButton variant="destructive" size="sm" @click="removeChannel(channel)">
+                        删除
+                      </UiButton>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </UiSurface>
 
         <UiSurface class="panel">
           <h3 class="panel-title">私信列表</h3>
-          <table class="list-table">
-            <thead>
-              <tr>
-                <th>参与者</th>
-                <th>DM Key</th>
-                <th>消息数</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="dm in dms" :key="dm.id">
-                <td><strong>{{ dm.participants }}</strong></td>
-                <td class="muted">{{ dm.name }}</td>
-                <td>{{ dm.messageCount }}</td>
-                <td>
-                  <UiButton variant="secondary" size="sm" @click="openRoom('dm', dm.id, dm.participants)">
-                    打开对话
-                  </UiButton>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="admin-table-wrap">
+            <table class="list-table">
+              <thead>
+                <tr>
+                  <th>参与者</th>
+                  <th>DM Key</th>
+                  <th>消息数</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="dm in dms" :key="dm.id">
+                  <td><strong>{{ dm.participants }}</strong></td>
+                  <td class="muted">{{ dm.name }}</td>
+                  <td>{{ dm.messageCount }}</td>
+                  <td>
+                    <UiButton variant="secondary" size="sm" @click="openRoom('dm', dm.id, dm.participants)">
+                      打开对话
+                    </UiButton>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </UiSurface>
       </section>
     </div>

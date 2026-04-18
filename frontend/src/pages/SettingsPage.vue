@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { computed, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '../api.js';
@@ -67,53 +67,58 @@ async function changePassword() {
 </script>
 
 <template>
-  <div class="page-shell">
-    <div class="page-card">
-      <header class="settings-header">
-        <div>
-          <div class="title">个人设置</div>
-          <div class="muted">修改显示名称、头像和密码。</div>
+  <div class="page-shell settings-page">
+    <div class="page-card settings-shell">
+      <header class="settings-shell__header">
+        <div class="settings-shell__heading">
+          <p class="settings-shell__kicker">Account</p>
+          <h1>个人设置</h1>
+          <p>集中管理头像、显示名称与登录密码。</p>
         </div>
-        <UiButton variant="secondary" @click="router.push('/')">返回聊天</UiButton>
+        <div class="settings-shell__actions">
+          <UiButton variant="secondary" @click="router.push('/')">返回聊天</UiButton>
+        </div>
       </header>
 
-      <div class="settings-body grid-two">
-        <section class="panel">
-          <h3 class="panel-title">个人资料</h3>
-          <div class="avatar-row">
-            <img v-if="session?.avatarUrl" :src="session.avatarUrl" class="avatar avatar--profile" alt="avatar" />
-            <div v-else class="avatar avatar--profile"></div>
-            <div class="avatar-upload">
-              <input id="settings-avatar-upload" type="file" class="avatar-upload__input" @change="uploadAvatar" />
-              <label class="avatar-upload__button ui-button ui-button--secondary ui-button--sm" for="settings-avatar-upload">
-                更换头像
-              </label>
-              <span class="avatar-upload__note">支持图片文件，上传后会立即更新资料</span>
+      <div class="settings-shell__body">
+        <div class="settings-layout">
+          <section class="panel settings-card">
+            <h2 class="panel-title">个人资料</h2>
+            <div class="avatar-row">
+              <img v-if="session?.avatarUrl" :src="session.avatarUrl" class="avatar avatar--profile" alt="avatar" />
+              <div v-else class="avatar avatar--profile"></div>
+              <div class="avatar-upload">
+                <input id="settings-avatar-upload" type="file" class="avatar-upload__input" @change="uploadAvatar" />
+                <label class="avatar-upload__button ui-button ui-button--secondary ui-button--sm" for="settings-avatar-upload">
+                  更换头像
+                </label>
+                <span class="avatar-upload__note">支持图片文件，上传后会立即更新资料</span>
+              </div>
             </div>
-          </div>
 
-          <label class="field">
-            <span>显示名称</span>
-            <input v-model.trim="profileForm.displayName" />
-          </label>
-          <UiButton @click="saveProfile">保存资料</UiButton>
-        </section>
+            <label class="field">
+              <span>显示名称</span>
+              <input v-model.trim="profileForm.displayName" />
+            </label>
+            <UiButton @click="saveProfile">保存资料</UiButton>
+          </section>
 
-        <section class="panel">
-          <h3 class="panel-title">修改密码</h3>
-          <label class="field">
-            <span>当前密码</span>
-            <input v-model="passwordForm.currentPassword" type="password" />
-          </label>
-          <label class="field">
-            <span>新密码</span>
-            <input v-model="passwordForm.newPassword" type="password" />
-          </label>
-          <UiButton @click="changePassword">更新密码</UiButton>
-        </section>
+          <section class="panel settings-card">
+            <h2 class="panel-title">安全设置</h2>
+            <label class="field">
+              <span>当前密码</span>
+              <input v-model="passwordForm.currentPassword" type="password" />
+            </label>
+            <label class="field">
+              <span>新密码</span>
+              <input v-model="passwordForm.newPassword" type="password" />
+            </label>
+            <UiButton @click="changePassword">更新密码</UiButton>
+          </section>
+        </div>
       </div>
 
-      <div class="settings-foot">
+      <div class="settings-shell__foot">
         <p v-if="info" class="tag">{{ info }}</p>
         <p v-if="error" class="error-text">{{ error }}</p>
       </div>

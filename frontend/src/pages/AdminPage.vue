@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { computed } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 import UiButton from '../components/ui/Button.vue';
@@ -31,14 +31,13 @@ const currentTitle = computed(
 </script>
 
 <template>
-  <div class="page-shell">
+  <div class="page-shell admin-page">
     <div class="page-card admin-shell">
       <aside class="admin-shell__sidebar">
         <div class="admin-shell__brand">
-          <div>
-            <div class="title" style="font-size: 28px; margin-bottom: 4px">管理后台</div>
-            <div class="muted">拆分为用户管理、消息查看、网站设置三个子页面。</div>
-          </div>
+          <p class="admin-shell__kicker">System Console</p>
+          <h1 class="admin-shell__title">管理后台</h1>
+          <p class="admin-shell__subtitle">统一处理用户、消息与站点配置，保持操作路径清晰可追踪。</p>
         </div>
 
         <nav class="admin-shell__nav">
@@ -49,14 +48,14 @@ const currentTitle = computed(
             :class="{ 'admin-shell__nav-item--active': route.path.startsWith(item.to) }"
             @click="router.push(item.to)"
           >
-            <strong>{{ item.label }}</strong>
-            <span>{{ item.description }}</span>
+            <strong class="admin-shell__nav-label">{{ item.label }}</strong>
+            <span class="admin-shell__nav-desc">{{ item.description }}</span>
           </button>
         </nav>
 
         <UiSurface tone="soft" class="admin-shell__sidebar-card">
-          <strong>{{ currentTitle }}</strong>
-          <p>这里保留后台管理操作，聊天会话页只负责即时沟通。</p>
+          <strong>当前模块：{{ currentTitle }}</strong>
+          <p>后台仅负责治理与审计，实时沟通入口保持在聊天主界面。</p>
           <div class="inline-actions">
             <UiButton variant="secondary" size="sm" @click="router.push('/')">返回聊天</UiButton>
             <UiButton variant="ghost" size="sm" @click="router.push('/settings')">个人设置</UiButton>

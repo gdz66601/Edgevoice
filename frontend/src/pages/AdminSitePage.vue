@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '../api.js';
@@ -146,7 +146,7 @@ onMounted(loadOverview);
 <template>
   <div class="admin-section">
     <header class="admin-section__header">
-      <div>
+      <div class="admin-section__heading">
         <h1>网站设置</h1>
         <p>查看站点概况，并处理后台级的群组创建与管理入口。</p>
       </div>
@@ -176,7 +176,7 @@ onMounted(loadOverview);
         </UiSurface>
       </section>
 
-      <section class="grid-two">
+      <section class="admin-grid admin-grid--two">
         <UiSurface class="panel">
           <h3 class="panel-title">站点外观</h3>
           <label class="field">
@@ -203,7 +203,10 @@ onMounted(loadOverview);
             </UiButton>
           </div>
           <div class="admin-site-preview">
-            <div class="admin-site-preview__icon">
+            <div
+              class="admin-site-preview__icon"
+              :class="{ 'admin-site-preview__icon--empty': !siteForm.siteIconUrl }"
+            >
               <img v-if="siteForm.siteIconUrl" :src="siteForm.siteIconUrl" alt="site icon" />
               <span v-else>{{ siteForm.siteName.slice(0, 1) || 'C' }}</span>
             </div>
