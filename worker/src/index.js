@@ -18,6 +18,7 @@ import { registerMessageRoutes } from './api/messages.js';
 import { registerUploadRoutes } from './api/upload.js';
 import { ChannelRoom } from './do/ChannelRoom.js';
 import { Scheduler } from './do/Scheduler.js';
+import { runScheduledGc } from './gc.js';
 import { errorResponse, parseJsonRequest, publicFileUrl } from './utils.js';
 
 const app = new Hono();
@@ -455,20 +456,10 @@ app.onError((error) => {
   return errorResponse('服务器开小差了', 500);
 });
 
-async function cleanupExpiredMessages(env) {
-  const retentionDays = Number(env.MESSAGE_RETENTION_DAYS || 7);
-  await env.DB.prepare(
-    `DELETE FROM messages
-     WHERE created_at < datetime('now', ?)`
-  )
-    .bind(`-${retentionDays} day`)
-    .run();
-}
-
 export default {
   fetch: app.fetch,
   async scheduled(_controller, env, ctx) {
-    ctx.waitUntil(cleanupExpiredMessages(env));
+    ctx.waitUntil(runScheduledGc(env));
   }
 };
 export { ChannelRoom, Scheduler };

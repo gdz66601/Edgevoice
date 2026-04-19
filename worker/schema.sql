@@ -75,6 +75,15 @@ CREATE TABLE IF NOT EXISTS registration_invites (
   FOREIGN KEY (consumed_by_user_id) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS pending_r2_delete (
+  object_key TEXT PRIMARY KEY,
+  retry_count INTEGER NOT NULL DEFAULT 0,
+  next_retry_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_error TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 INSERT OR IGNORE INTO site_settings (setting_key, setting_value)
 VALUES ('site_name', 'Edgechat');
 
@@ -95,3 +104,6 @@ CREATE INDEX IF NOT EXISTS idx_users_username
 
 CREATE INDEX IF NOT EXISTS idx_registration_invites_active
   ON registration_invites(created_at DESC, deleted_at, consumed_at);
+
+CREATE INDEX IF NOT EXISTS idx_pending_r2_delete_next_retry
+  ON pending_r2_delete(next_retry_at, retry_count);
