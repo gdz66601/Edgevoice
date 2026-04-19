@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS channels (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL UNIQUE,
   description TEXT NOT NULL DEFAULT '',
+  avatar_key TEXT,
   kind TEXT NOT NULL CHECK (kind IN ('public', 'private', 'dm')),
   dm_key TEXT UNIQUE,
   created_by INTEGER,
@@ -75,7 +76,7 @@ CREATE TABLE IF NOT EXISTS registration_invites (
 );
 
 INSERT OR IGNORE INTO site_settings (setting_key, setting_value)
-VALUES ('site_name', 'CF Chat');
+VALUES ('site_name', 'Edgechat');
 
 INSERT OR IGNORE INTO site_settings (setting_key, setting_value)
 VALUES ('site_icon_url', '');

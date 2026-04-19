@@ -103,6 +103,13 @@ export default {
       method: 'DELETE'
     });
   },
+  updateChannel(channelId, payload) {
+    return request(`/channels/${channelId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload
+    });
+  },
   getMessages(kind, roomId, before) {
     const query = new URLSearchParams({ kind, roomId: String(roomId) });
     if (before) {

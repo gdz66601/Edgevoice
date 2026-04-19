@@ -28,12 +28,16 @@ const pendingAttachment = ref(null);
 const sending = ref(false);
 const groupSubmitting = ref(false);
 const inviteSubmitting = ref(false);
+const groupSettingsSaving = ref(false);
+const groupAvatarUploading = ref(false);
 const messagesEl = ref(null);
 const fileInputEl = ref(null);
+const groupAvatarInputEl = ref(null);
 const inviteUserId = ref('');
 const showQuickActions = ref(false);
 const quickActionMode = ref('');
 const showMemberPanel = ref(false);
+const showGroupEditor = ref(false);
 const isMobileViewport = ref(false);
 const mobileView = ref('list');
 
@@ -47,6 +51,11 @@ const createGroupForm = reactive({
   description: '',
   kind: 'public',
   memberUserIds: []
+});
+const groupSettingsForm = reactive({
+  name: '',
+  avatarUrl: '',
+  avatarKey: ''
 });
 
 const session = computed(() => store.session);
@@ -108,8 +117,8 @@ const conversationItems = computed(() => {
       channel.kind === 'public' && !channel.isMember
         ? `公开群组 · 点击加入`
         : `群主 ${channel.ownerDisplayName || '未知'}`,
-    avatarUrl: '',
-    fallback: channel.kind === 'private' ? '群' : '聊',
+    avatarUrl: channel.avatarUrl || '',
+    fallback: channel.name ? channel.name.slice(0, 1) : '群',
     lastMessageAt: channel.lastMessageAt || '',
     source: channel
   }));
@@ -275,11 +284,33 @@ function applyActiveChannel(channel) {
     kind: channel.kind,
     name: channel.name,
     description: channel.description,
+    avatarUrl: channel.avatarUrl || '',
+    avatarKey: channel.avatarKey || '',
     ownerDisplayName: channel.ownerDisplayName || '',
     canManage: Boolean(channel.canManage),
     myRole: channel.myRole || '',
     memberCount: Number(channel.memberCount || 0)
   };
+
+  syncGroupSettingsForm();
+}
+
+function syncGroupSettingsForm() {
+  groupSettingsForm.name = activeRoom.value?.name || '';
+  groupSettingsForm.avatarUrl = activeRoom.value?.avatarUrl || '';
+  groupSettingsForm.avatarKey = activeRoom.value?.avatarKey || '';
+}
+
+function openGroupEditor() {
+  if (!canManageActiveRoom.value) {
+    return;
+  }
+  syncGroupSettingsForm();
+  showGroupEditor.value = true;
+}
+
+function closeGroupEditor() {
+  showGroupEditor.value = false;
 }
 
 async function selectChannel(channel) {
@@ -354,6 +385,12 @@ async function loadMembers() {
     activeRoom.value.canManage = payload.room.canManage;
     activeRoom.value.myRole = payload.room.myRole;
     activeRoom.value.memberCount = payload.members.length;
+    if (payload.room.name) {
+      activeRoom.value.name = payload.room.name;
+    }
+    activeRoom.value.avatarUrl = payload.room.avatarUrl || '';
+    activeRoom.value.avatarKey = payload.room.avatarKey || '';
+    syncGroupSettingsForm();
   } catch (currentError) {
     error.value = currentError.message;
   } finally {
@@ -442,6 +479,10 @@ function handleComposerKeydown(event) {
 
 function openFilePicker() {
   fileInputEl.value?.click();
+}
+
+function openGroupAvatarPicker() {
+  groupAvatarInputEl.value?.click();
 }
 
 async function uploadAttachment(event) {
@@ -556,6 +597,66 @@ async function deleteGroup() {
   }
 }
 
+async function uploadGroupAvatar(event) {
+  const file = event.target.files?.[0];
+  if (!file || !activeRoom.value) {
+    return;
+  }
+
+  groupAvatarUploading.value = true;
+  error.value = '';
+  try {
+    const payload = await api.uploadFile(file);
+    groupSettingsForm.avatarUrl = payload.file.url;
+    groupSettingsForm.avatarKey = payload.file.key;
+  } catch (currentError) {
+    error.value = currentError.message;
+  } finally {
+    groupAvatarUploading.value = false;
+    event.target.value = '';
+  }
+}
+
+async function saveGroupSettings() {
+  if (!activeRoom.value || activeRoom.value.kind === 'dm') {
+    return;
+  }
+
+  const name = groupSettingsForm.name.trim();
+  if (!name) {
+    error.value = '请填写群组名称';
+    return;
+  }
+
+  groupSettingsSaving.value = true;
+  error.value = '';
+  try {
+    const payload = await api.updateChannel(activeRoom.value.id, {
+      name,
+      avatarKey: groupSettingsForm.avatarKey || null
+    });
+    activeRoom.value.name = payload.channel.name;
+    activeRoom.value.avatarKey = payload.channel.avatarKey || '';
+    activeRoom.value.avatarUrl = payload.channel.avatarUrl || '';
+    groupSettingsForm.name = activeRoom.value.name;
+    groupSettingsForm.avatarKey = activeRoom.value.avatarKey || '';
+    groupSettingsForm.avatarUrl = activeRoom.value.avatarUrl || '';
+
+    const channel = channels.value.find((item) => item.id === activeRoom.value.id);
+    if (channel) {
+      channel.name = activeRoom.value.name;
+      channel.avatarKey = activeRoom.value.avatarKey || '';
+      channel.avatarUrl = activeRoom.value.avatarUrl || '';
+    }
+    closeGroupEditor();
+    await refreshSidebar();
+  } catch (currentError) {
+    error.value = currentError.message;
+  } finally {
+    groupSettingsSaving.value = false;
+  }
+}
+
 async function bootstrap() {
   sidebarLoading.value = true;
   error.value = '';
@@ -588,6 +689,7 @@ watch(activeRoomKey, async (roomKey, previousRoomKey) => {
   const shouldRestorePanel =
     showMemberPanel.value && isChannelRoomKey(previousRoomKey || '') && isChannelRoomKey(roomKey);
 
+  showGroupEditor.value = false;
   showMemberPanel.value = false;
   await loadMessages();
   await loadMembers();
@@ -941,8 +1043,51 @@ onBeforeUnmount(() => {
                   </div>
                   <div class="chat-room-manage__actions">
                     <UiBadge variant="success">{{ activeRoom.myRole || 'member' }}</UiBadge>
+                    <UiButton v-if="canManageActiveRoom" variant="secondary" size="sm" @click="openGroupEditor">
+                      更改群组信息
+                    </UiButton>
                     <UiButton v-if="canManageActiveRoom" variant="ghost" size="sm" @click="deleteGroup">
                       删除群组
+                    </UiButton>
+                  </div>
+                </div>
+
+                <div v-if="false && canManageActiveRoom" class="chat-room-manage__settings">
+                  <div class="chat-room-manage__settings-header">
+                    <strong>群组设置</strong>
+                    <span>仅群主可修改头像与名称</span>
+                  </div>
+                  <div class="chat-room-manage__settings-body">
+                    <div class="chat-room-manage__avatar">
+                      <UiAvatar
+                        :src="groupSettingsForm.avatarUrl || activeRoom.avatarUrl"
+                        :fallback="groupSettingsForm.name || activeRoom.name"
+                        size="lg"
+                      />
+                      <div class="chat-room-manage__avatar-actions">
+                        <input
+                          ref="groupAvatarInputEl"
+                          type="file"
+                          accept="image/*"
+                          style="display: none"
+                          @change="uploadGroupAvatar"
+                        />
+                        <UiButton
+                          variant="secondary"
+                          size="sm"
+                          :disabled="groupAvatarUploading"
+                          @click="openGroupAvatarPicker"
+                        >
+                          {{ groupAvatarUploading ? '上传中...' : '上传头像' }}
+                        </UiButton>
+                      </div>
+                    </div>
+                    <label class="field">
+                      <span>群组名称</span>
+                      <input v-model.trim="groupSettingsForm.name" />
+                    </label>
+                    <UiButton :disabled="groupSettingsSaving" @click="saveGroupSettings">
+                      {{ groupSettingsSaving ? '保存中...' : '保存设置' }}
                     </UiButton>
                   </div>
                 </div>
@@ -986,5 +1131,66 @@ onBeforeUnmount(() => {
         </div>
       </main>
     </div>
+
+    <Transition name="panel-float">
+      <div
+        v-if="showGroupEditor && canManageActiveRoom"
+        class="chat-group-editor"
+        @click.self="closeGroupEditor"
+      >
+        <UiSurface tone="strong" class="chat-group-editor__panel">
+          <div class="chat-group-editor__header">
+            <strong>编辑群组信息</strong>
+            <UiButton variant="ghost" size="sm" @click="closeGroupEditor">关闭</UiButton>
+          </div>
+
+          <div class="chat-group-editor__body">
+            <input
+              ref="groupAvatarInputEl"
+              type="file"
+              accept="image/*"
+              style="display: none"
+              @change="uploadGroupAvatar"
+            />
+
+            <button
+              class="chat-group-editor__avatar-tile"
+              type="button"
+              :disabled="groupAvatarUploading"
+              @click="openGroupAvatarPicker"
+            >
+              <UiAvatar
+                :src="groupSettingsForm.avatarUrl || activeRoom?.avatarUrl"
+                :fallback="groupSettingsForm.name || activeRoom?.name"
+                size="lg"
+              />
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M8 8h2.2l1.2-1.8h4.8L17.4 8H19a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3Z"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.8"
+                />
+                <circle cx="12" cy="13" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8" />
+              </svg>
+            </button>
+
+            <label class="chat-group-editor__field">
+              <span>群组名称</span>
+              <input v-model.trim="groupSettingsForm.name" maxlength="40" />
+            </label>
+          </div>
+
+          <div class="chat-group-editor__footer">
+            <UiButton variant="secondary" @click="closeGroupEditor">取消</UiButton>
+            <UiButton :disabled="groupSettingsSaving" @click="saveGroupSettings">
+              {{ groupSettingsSaving ? '保存中...' : '保存' }}
+            </UiButton>
+          </div>
+        </UiSurface>
+      </div>
+    </Transition>
   </div>
 </template>

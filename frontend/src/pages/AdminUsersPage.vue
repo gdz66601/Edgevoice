@@ -7,11 +7,17 @@ import UiSurface from '../components/ui/Surface.vue';
 const loading = ref(false);
 const error = ref('');
 const users = ref([]);
+const inviteSubmitting = ref(false);
+const invites = ref([]);
+const copiedInviteId = ref(0);
 
 const createUserForm = reactive({
   username: '',
   displayName: '',
   password: ''
+});
+const inviteForm = reactive({
+  note: ''
 });
 
 const activeUserCount = computed(() => users.value.filter((user) => !user.isDisabled).length);
@@ -20,8 +26,12 @@ async function loadUsers() {
   loading.value = true;
   error.value = '';
   try {
-    const payload = await api.adminUsers();
-    users.value = payload.users;
+    const [usersPayload, invitePayload] = await Promise.all([
+      api.adminUsers(),
+      api.listAdminRegisterLinks()
+    ]);
+    users.value = usersPayload.users;
+    invites.value = invitePayload.invites || [];
   } catch (currentError) {
     error.value = currentError.message;
   } finally {
@@ -59,6 +69,55 @@ async function removeUser(user) {
   }
   await api.deleteUser(user.id);
   await loadUsers();
+}
+
+function inviteLinkUrl(token) {
+  return new URL(`/register/${token}`, window.location.origin).toString();
+}
+
+async function createInvite() {
+  inviteSubmitting.value = true;
+  error.value = '';
+  try {
+    const payload = await api.createAdminRegisterLink(inviteForm);
+    invites.value = [payload.invite, ...invites.value];
+    inviteForm.note = '';
+  } catch (currentError) {
+    error.value = currentError.message;
+  } finally {
+    inviteSubmitting.value = false;
+  }
+}
+
+async function copyInvite(invite) {
+  try {
+    await navigator.clipboard.writeText(inviteLinkUrl(invite.token));
+    copiedInviteId.value = invite.id;
+    window.setTimeout(() => {
+      if (copiedInviteId.value === invite.id) {
+        copiedInviteId.value = 0;
+      }
+    }, 1600);
+  } catch {
+    error.value = '复制失败，请手动复制链接';
+  }
+}
+
+async function revokeInvite(invite) {
+  if (!window.confirm('确认停用这个注册链接吗？')) {
+    return;
+  }
+
+  try {
+    await api.revokeAdminRegisterLink(invite.id);
+    invites.value = invites.value.map((item) =>
+      item.id === invite.id
+        ? { ...item, deletedAt: new Date().toISOString(), isAvailable: false }
+        : item
+    );
+  } catch (currentError) {
+    error.value = currentError.message;
+  }
 }
 
 onMounted(loadUsers);
@@ -106,20 +165,57 @@ onMounted(loadUsers);
         </UiSurface>
 
         <UiSurface class="panel">
-          <h3 class="panel-title">使用说明</h3>
+          <h3 class="panel-title">注册链接</h3>
+          <label class="field">
+            <span>链接备注</span>
+            <input v-model.trim="inviteForm.note" placeholder="例如：四月新成员入口" />
+          </label>
+          <UiButton block :disabled="inviteSubmitting" @click="createInvite">
+            {{ inviteSubmitting ? '创建中...' : '创建一次性注册链接' }}
+          </UiButton>
+
           <div class="stack">
-            <div class="admin-note">
-              <strong>禁用账号</strong>
-              <span>用户会被阻止继续登录，但历史消息仍会保留。</span>
-            </div>
-            <div class="admin-note">
-              <strong>重置密码</strong>
-              <span>适合处理遗忘密码或管理员临时接管场景。</span>
-            </div>
-            <div class="admin-note">
-              <strong>删除账号</strong>
-              <span>会执行软删除，建议先确认该用户是否还参与重要群组。</span>
-            </div>
+            <div v-if="!invites.length" class="muted">还没有注册链接。</div>
+            <UiSurface
+              v-for="invite in invites"
+              :key="invite.id"
+              tone="soft"
+              class="admin-invite-card"
+            >
+              <div class="admin-invite-card__head">
+                <div>
+                  <strong>{{ invite.note || '未命名注册链接' }}</strong>
+                  <p>
+                    {{
+                      invite.isAvailable
+                        ? '可用，限 1 人注册'
+                        : invite.deletedAt
+                          ? '已停用'
+                          : '已使用'
+                    }}
+                  </p>
+                </div>
+                <div class="inline-actions">
+                  <UiButton variant="secondary" size="sm" @click="copyInvite(invite)">
+                    {{ copiedInviteId === invite.id ? '已复制' : '复制链接' }}
+                  </UiButton>
+                  <UiButton
+                    v-if="invite.isAvailable"
+                    variant="destructive"
+                    size="sm"
+                    @click="revokeInvite(invite)"
+                  >
+                    停用
+                  </UiButton>
+                </div>
+              </div>
+              <div class="admin-invite-card__url">{{ inviteLinkUrl(invite.token) }}</div>
+              <div class="admin-invite-card__meta">
+                <span>创建者：{{ invite.creatorDisplayName }}</span>
+                <span>创建时间：{{ new Date(invite.createdAt).toLocaleString() }}</span>
+                <span v-if="invite.consumerDisplayName">使用者：{{ invite.consumerDisplayName }}</span>
+              </div>
+            </UiSurface>
           </div>
         </UiSurface>
       </section>

@@ -10,3 +10,6 @@ wrangler.toml
 node_modules/
 .wrangler/
 .DS_Store
+AGENTS.md
+Agent.md
+frontend/dist/

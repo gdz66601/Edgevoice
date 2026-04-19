@@ -6,13 +6,13 @@ const state = reactive({
   token: localStorage.getItem('cfchat.token') || '',
   session: null,
   site: {
-    siteName: 'CF Chat',
+    siteName: 'Edgechat',
     siteIconUrl: ''
   }
 });
 
 function applySiteMetadata(site) {
-  const siteName = String(site?.siteName || 'CF Chat').trim() || 'CF Chat';
+  const siteName = String(site?.siteName || 'Edgechat').trim() || 'Edgechat';
   const siteIconUrl = String(site?.siteIconUrl || '').trim();
   document.title = siteName;
 
@@ -89,7 +89,7 @@ function setSession(session) {
 
 function setSite(site) {
   state.site = {
-    siteName: String(site?.siteName || 'CF Chat').trim() || 'CF Chat',
+    siteName: String(site?.siteName || 'Edgechat').trim() || 'Edgechat',
     siteIconUrl: String(site?.siteIconUrl || '').trim()
   };
   applySiteMetadata(state.site);

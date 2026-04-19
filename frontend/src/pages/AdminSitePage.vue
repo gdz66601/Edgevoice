@@ -20,7 +20,7 @@ const iconFileInputEl = ref(null);
 const copiedInviteId = ref(0);
 
 const siteForm = reactive({
-  siteName: 'CF Chat',
+  siteName: 'Edgechat',
   siteIconUrl: ''
 });
 const inviteForm = reactive({
@@ -42,7 +42,7 @@ async function loadOverview() {
     users.value = payload.users;
     channels.value = payload.channels;
     dms.value = payload.dms;
-    siteForm.siteName = payload.site?.siteName || 'CF Chat';
+    siteForm.siteName = payload.site?.siteName || 'Edgechat';
     siteForm.siteIconUrl = payload.site?.siteIconUrl || '';
     const invitePayload = await api.listAdminRegisterLinks();
     invites.value = invitePayload.invites || [];
@@ -211,7 +211,7 @@ onMounted(loadOverview);
               <span v-else>{{ siteForm.siteName.slice(0, 1) || 'C' }}</span>
             </div>
             <div class="admin-site-preview__meta">
-              <strong>{{ siteForm.siteName || 'CF Chat' }}</strong>
+              <strong>{{ siteForm.siteName || 'Edgechat' }}</strong>
               <span>{{ siteForm.siteIconUrl || '未设置图标 URL' }}</span>
             </div>
           </div>
