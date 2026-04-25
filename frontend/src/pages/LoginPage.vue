@@ -30,11 +30,9 @@ async function submit() {
 <template>
   <div class="page-shell login-shell">
     <div class="page-card login-card">
-      <p class="tag">Cloudflare Workers + Vue</p>
+      <p class="tag">欢迎回来</p>
       <h1 class="title">{{ store.site.siteName }}</h1>
-      <p class="subtitle">
-        管理员创建账号后即可登录。前端保持轻量，后端按频道与私信分房间处理实时消息。
-      </p>
+      <p class="subtitle">登录后即可继续与团队协作，消息与进展一目了然。</p>
       <p v-if="registered" class="muted">注册成功，现在可以使用新账号登录。</p>
 
       <form @submit.prevent="submit">
