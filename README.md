@@ -59,7 +59,6 @@ cfchat/
 ├─ wrangler.toml
 ├─ package.json
 ├─ README.md
-├─ TECHNICAL.md
 └─ LICENSE
 ```
 
@@ -142,12 +141,6 @@ MAX_FILE_SIZE = "20971520"
 - `/admin/users`：用户管理
 - `/admin/messages`：消息查看
 - `/admin/site`：网站设置
-
-## 技术文档
-
-更完整的架构、数据模型、实时链路、部署方式与优化说明见：
-
-- [TECHNICAL.md](TECHNICAL.md)
 
 ## 贡献者
 

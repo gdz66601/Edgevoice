@@ -5,6 +5,7 @@ wrangler.toml
 # Project documentation (not for GitHub)
 项目文档.md
 本地部署说明.md
+TECHNICAL.md
 
 # Dependencies
 node_modules/
