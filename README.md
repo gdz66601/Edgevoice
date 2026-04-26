@@ -205,3 +205,5 @@ MAX_FILE_SIZE = "20971520"
 - 若设置了管理员初始化 Secrets，部署时会自动创建（或恢复）该管理员账号。
 - Cron 触发器会通过 `wrangler deploy` 根据生成配置中的 `[triggers]` 同步。
 - `worker/migrations/` 下的 SQL 文件不会在 CI 中自动执行。
+
+感谢 <a href="https://linux.do" target="_blank">linux do</a> 社区为本项目做出的推广
