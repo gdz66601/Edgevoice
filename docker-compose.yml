@@ -1,0 +1,14 @@
+services:
+  edgechat:
+    build: .
+    ports:
+      - "8788:8787"
+    environment:
+      - NODE_ENV=development
+    restart: unless-stopped
+    networks:
+      - edgechat-network
+
+networks:
+  edgechat-network:
+    driver: bridge

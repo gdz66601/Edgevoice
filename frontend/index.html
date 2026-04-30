@@ -2,12 +2,30 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Edgechat</title>
     <meta name="description" content="Edgechat 团队沟通与协作空间" />
+    <meta name="theme-color" content="#fefdf8" />
   </head>
   <body>
+    <svg class="liquid-glass-filter" aria-hidden="true">
+      <defs>
+        <filter id="liquid-glass-engine" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="optics_blur_base" />
+          <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="3" result="vector_field_noise" />
+          <feGaussianBlur in="vector_field_noise" stdDeviation="3" result="smooth_vector_field" />
+          <feDisplacementMap in="optics_blur_base" in2="smooth_vector_field" scale="40" xChannelSelector="R" yChannelSelector="G" result="optics_refracted_body" />
+          <feOffset in="optics_refracted_body" dx="-3" dy="-1" result="optics_shift_red" />
+          <feColorMatrix in="optics_shift_red" type="matrix" result="isolated_red" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" />
+          <feOffset in="optics_refracted_body" dx="3" dy="1" result="optics_shift_blue" />
+          <feColorMatrix in="optics_shift_blue" type="matrix" result="isolated_blue" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" />
+          <feColorMatrix in="optics_refracted_body" type="matrix" result="isolated_green" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" />
+          <feBlend mode="screen" in="isolated_red" in2="isolated_green" result="composite_rg" />
+          <feBlend mode="screen" in="composite_rg" in2="isolated_blue" result="final_render_output" />
+        </filter>
+      </defs>
+    </svg>
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
   </body>
-  </html>
+</html>

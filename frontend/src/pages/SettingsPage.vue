@@ -9,7 +9,8 @@ const router = useRouter();
 const session = computed(() => store.session);
 const showAdminEntry = computed(() => Boolean(session.value?.isAdmin));
 const profileForm = reactive({
-  displayName: session.value?.displayName || ''
+  displayName: session.value?.displayName || '',
+  customBackground: localStorage.getItem('customBackground') || ''
 });
 const passwordForm = reactive({
   currentPassword: '',
@@ -24,6 +25,13 @@ async function saveProfile() {
   try {
     const payload = await api.updateProfile(profileForm);
     store.setSession(payload.session);
+    if (profileForm.customBackground) {
+      localStorage.setItem('customBackground', profileForm.customBackground);
+      document.body.style.background = profileForm.customBackground;
+    } else {
+      localStorage.removeItem('customBackground');
+      document.body.style.background = '';
+    }
     info.value = '资料已更新';
   } catch (currentError) {
     error.value = currentError.message;
@@ -101,6 +109,13 @@ async function changePassword() {
             <label class="field">
               <span>显示名称</span>
               <input v-model.trim="profileForm.displayName" />
+            </label>
+            <label class="field">
+              <span>自定义背景</span>
+              <input v-model.trim="profileForm.customBackground" placeholder="例如：linear-gradient(135deg, #667eea 0%, #764ba2 100%)" />
+              <small style="color: var(--text-soft); font-size: 0.85rem; margin-top: 4px;">
+                支持 CSS 渐变、纯色或图片 URL。留空使用默认背景。
+              </small>
             </label>
             <UiButton @click="saveProfile">保存资料</UiButton>
           </section>

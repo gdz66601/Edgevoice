@@ -1,0 +1,197 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>苹果液态玻璃 (Liquid Glass) 全能资源包</title>
+    <style>
+        :root {
+            --primary-color: #0071e3;
+            --bg-color: #f5f5f7;
+            --text-color: #1d1d1f;
+            --card-bg: #ffffff;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 40px 0;
+        }
+
+        h1 { font-size: 2.5rem; margin-bottom: 10px; }
+        .subtitle { font-size: 1.2rem; color: #86868b; }
+
+        section {
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+        }
+
+        h2 {
+            border-left: 5px solid var(--primary-color);
+            padding-left: 15px;
+            margin-top: 0;
+        }
+
+        code, pre {
+            background: #f0f0f2;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: "SF Mono", "Monaco", "Consolas", monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+            display: block;
+            white-space: pre-wrap;
+        }
+
+        .prompt-box {
+            background: #eef7ff;
+            border: 1px solid #cce5ff;
+            color: #004085;
+            padding: 20px;
+            border-radius: 12px;
+            font-style: italic;
+        }
+
+        /* 预览区域样式 */
+        .preview-zone {
+            height: 400px;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564') center/cover;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .glass-card {
+            position: relative;
+            width: 320px;
+            height: 180px;
+            border-radius: 2rem;
+            cursor: pointer;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            --m-x: 50%; --m-y: 50%;
+        }
+
+        .glass-filter {
+            position: absolute; inset: 0; border-radius: inherit;
+            backdrop-filter: blur(12px) saturate(150%);
+            -webkit-backdrop-filter: blur(12px) saturate(150%);
+            filter: url(#refraction);
+            z-index: 1;
+        }
+
+        .glass-specular {
+            position: absolute; inset: 0; border-radius: inherit;
+            z-index: 2;
+            box-shadow: inset 1px 1px 1px rgba(255,255,255,0.5);
+            background: radial-gradient(circle 150px at var(--m-x) var(--m-y), rgba(255,255,255,0.2), transparent);
+        }
+
+        .glass-content {
+            position: relative; z-index: 3;
+            height: 100%; display: flex; flex-direction: column;
+            justify-content: center; padding: 0 30px; color: white;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Liquid Glass 资源包</h1>
+        <p class="subtitle">面向 AI 的设计指南与完整实现方案</p>
+    </header>
+
+    <section>
+        <h2>1. 设计思路 (Design Concept)</h2>
+        <p>液态玻璃（Liquid Glass）是苹果在 iOS 26 中引入的下一代 UI 语言。它不再是死板的模糊，而是具备物理特性的光学模拟。</p>
+        <ul>
+            <li><strong>物理折射：</strong> 利用 SVG 噪点滤镜对背景像素进行位移映射，模拟光线穿过流体时的扭曲感。</li>
+            <li><strong>多层解耦：</strong> 区分滤镜层（扭曲）、遮罩层（色调）、高光层（反射）和内容层（清晰文字）。</li>
+            <li><strong>动态交互：</strong> 监听鼠标或陀螺仪数据，实时更新镜面高光位置，强化玻璃的物理存在感。</li>
+        </ul>
+    </section>
+
+    <section>
+        <h2>2. 实时预览 (Live Preview)</h2>
+        <p>将鼠标移动到下方的卡片上查看动态折射与高光效果：</p>
+        <div class="preview-zone">
+            <svg style="display:none">
+                <filter id="refraction">
+                    <feTurbulence type="fractalNoise" baseFrequency="0.01" numOctaves="2" result="noise" />
+                    <feDisplacementMap in="SourceGraphic" in2="noise" scale="30" />
+                </filter>
+            </svg>
+            <div class="glass-card" id="demoCard">
+                <div class="glass-filter"></div>
+                <div class="glass-specular"></div>
+                <div class="glass-content">
+                    <h3>Liquid Glass</h3>
+                    <p>Next-Gen UI Experience</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h2>3. 喂给 AI 的提示词 (AI Prompt)</h2>
+        <p>复制以下内容发送给 AI（如 Claude 或 GPT），即可让其生成符合该风格的组件：</p>
+        <div class="prompt-box">
+            "请帮我实现一个基于'液态玻璃 (Liquid Glass)'风格的 UI。要求：1. 使用 HTML/CSS 分层结构（filter, overlay, specular, content）。2. 必须包含一个 SVG 滤镜，利用 feTurbulence 和 feDisplacementMap 实现背景的物理折射扭曲效果。3. 使用 JS 实现跟随鼠标位置的动态 radial-gradient 高光。4. 整体视觉要有极高的通透感和深度感。"
+        </div>
+    </section>
+
+    <section>
+        <h2>4. 完整源代码 (Full Source Code)</h2>
+        <p>以下是实现该效果的核心代码块，包含关键的 CSS 变量和 SVG 滤镜定义：</p>
+        <pre><code>
+/* 核心 CSS 逻辑 */
+.glass-container {
+    filter: url(#liquid-refraction); /* 引用 SVG 滤镜 */
+    backdrop-filter: blur(15px);
+}
+
+.specular-layer {
+    background: radial-gradient(circle at var(--x) var(--y), white, transparent);
+}
+
+/* SVG 滤镜定义 */
+&lt;filter id="liquid-refraction"&gt;
+    &lt;feTurbulence baseFrequency="0.01" numOctaves="2" /&gt;
+    &lt;feDisplacementMap scale="40" /&gt;
+&lt;/filter&gt;
+        </code></pre>
+    </section>
+</div>
+
+<script>
+    const card = document.getElementById('demoCard');
+    card.addEventListener('mousemove', (e) => {
+        const rect = card.getBoundingClientRect();
+        card.style.setProperty('--m-x', `${e.clientX - rect.left}px`);
+        card.style.setProperty('--m-y', `${e.clientY - rect.top}px`);
+    });
+</script>
+
+</body>
+</html>
