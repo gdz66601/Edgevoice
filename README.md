@@ -148,19 +148,7 @@ MAX_FILE_SIZE = "20971520"
 
 感谢所有为项目提供帮助的贡献者：
 
-<table>
-  <tr>
-    <td align="center">
-      <a href="https://github.com/VenLac">
-        <img src="https://github.com/VenLac.png?size=100" width="100px;" alt="VenLac" />
-        <br />
-        <sub><b>VenLac</b></sub>
-      </a>
-      <br />
-      界面与安全
-    </td>
-  </tr>
-</table>
+[![贡献者](https://contrib.rocks/image?repo=gdz66601/Edgechat)](https://github.com/gdz66601/Edgechat/graphs/contributors)
 
 ## 协议说明
 
