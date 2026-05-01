@@ -49,11 +49,40 @@ async function submit() {
           />
         </label>
 
-        <button class="button" :disabled="loading" type="submit">
-          {{ loading ? '登录中...' : '登录' }}
-        </button>
+        <div class="login-actions">
+          <button class="button" :disabled="loading" type="submit">
+            {{ loading ? '登录中...' : '登录' }}
+          </button>
+          <button
+            v-if="store.site.allowPublicRegister"
+            class="button secondary"
+            type="button"
+            @click="router.push('/register/public')"
+          >
+            注册账号
+          </button>
+        </div>
         <p v-if="error" class="error-text">{{ error }}</p>
       </form>
     </div>
   </div>
 </template>
+
+<style scoped>
+.login-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+@media (min-width: 480px) {
+  .login-actions {
+    flex-direction: row;
+  }
+
+  .login-actions .button {
+    flex: 1;
+  }
+}
+</style>

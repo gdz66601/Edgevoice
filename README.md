@@ -4,7 +4,7 @@
 
 [GitHub 仓库](https://github.com/gdz66601/Edgechat) · [开源协议（GPL v3 或更高版本）](https://www.gnu.org/licenses/gpl-3.0)
 
-EdgeChat 是一个团队聊天系统，提供账号体系、公开群组、私有群组、私信、实时消息、文件上传和管理员后台，目标是在 Cloudflare 生态中以较低运维成本实现一套可直接落地的站内 IM。
+EdgeChat是一个部署在cloudflare的聊天系统，提供账号体系、公开群组、私有群组、私信、实时消息、文件上传和管理员后台，目标是在 Cloudflare 生态中以较低运维成本实现一套可直接落地的站内 IM。
 
 本项目采用 `GPL-3.0-or-later` 协议，详见 [LICENSE](LICENSE)。
 
