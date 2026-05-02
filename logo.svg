@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Edgechat default logo</title>
+  <desc id="desc">A rounded blue chat badge with layered speech bubbles.</desc>
+  <defs>
+    <linearGradient id="bg" x1="32" y1="28" x2="224" y2="228" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#dceced" />
+      <stop offset="0.52" stop-color="#c6d8e6" />
+      <stop offset="1" stop-color="#abbbd1" />
+    </linearGradient>
+    <linearGradient id="bubble" x1="68" y1="64" x2="186" y2="170" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" />
+      <stop offset="1" stop-color="#f4f8fb" />
+    </linearGradient>
+    <linearGradient id="accent" x1="96" y1="118" x2="180" y2="196" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5d7497" />
+      <stop offset="1" stop-color="#425978" />
+    </linearGradient>
+  </defs>
+  <rect x="20" y="20" width="216" height="216" rx="56" fill="url(#bg)" />
+  <path
+    d="M74 76c0-13.255 10.745-24 24-24h60c13.255 0 24 10.745 24 24v41c0 13.255-10.745 24-24 24h-26.419l-19.838 18.75c-4.464 4.219-11.743 1.056-11.743-5.086V141H98c-13.255 0-24-10.745-24-24V76Z"
+    fill="url(#bubble)"
+  />
+  <path
+    d="M105 115c0-10.493 8.507-19 19-19h34c10.493 0 19 8.507 19 19v19c0 10.493-8.507 19-19 19h-10.816l-12.204 11.537c-3.351 3.168-8.98.795-8.98-3.816V153H124c-10.493 0-19-8.507-19-19v-19Z"
+    fill="url(#accent)"
+  />
+  <circle cx="107" cy="98" r="8" fill="#90a4bd" />
+  <circle cx="128" cy="98" r="8" fill="#90a4bd" />
+  <circle cx="149" cy="98" r="8" fill="#90a4bd" />
+  <circle cx="132" cy="124.5" r="6.5" fill="#dceced" />
+  <circle cx="149" cy="124.5" r="6.5" fill="#dceced" />
+  <circle cx="166" cy="124.5" r="6.5" fill="#dceced" />
+</svg>

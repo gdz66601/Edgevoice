@@ -2,6 +2,7 @@ import { reactive } from 'vue';
 import api from './api.js';
 
 const AUTH_INVALID_EVENT = 'cfchat:auth-invalid';
+const DEFAULT_SITE_ICON_URL = '/logo.svg';
 
 const state = reactive({
   ready: false,
@@ -34,7 +35,7 @@ function applySiteMetadata(site) {
   if (siteIconUrl) {
     favicon.setAttribute('href', siteIconUrl);
   } else {
-    favicon.removeAttribute('href');
+    favicon.setAttribute('href', DEFAULT_SITE_ICON_URL);
   }
 }
 
