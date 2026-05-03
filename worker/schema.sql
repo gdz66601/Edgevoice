@@ -99,6 +99,30 @@ CREATE INDEX IF NOT EXISTS idx_messages_sender_created
 CREATE INDEX IF NOT EXISTS idx_channels_kind
   ON channels(kind, id DESC);
 
+-- 审计日志表：记录所有管理员操作
+CREATE TABLE IF NOT EXISTS admin_audit_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  admin_user_id INTEGER NOT NULL,
+  action TEXT NOT NULL,
+  target_type TEXT,
+  target_id INTEGER,
+  details TEXT NOT NULL DEFAULT '{}',
+  ip_address TEXT,
+  user_agent TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (admin_user_id) REFERENCES users(id)
+);
+
+-- 审计日志索引
+CREATE INDEX IF NOT EXISTS idx_admin_audit_created
+  ON admin_audit_log(admin_user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_admin_audit_action
+  ON admin_audit_log(action, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_admin_audit_target
+  ON admin_audit_log(target_type, target_id, created_at DESC);
+
 CREATE INDEX IF NOT EXISTS idx_users_username
   ON users(username);
 

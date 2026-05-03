@@ -11,6 +11,20 @@ const BLOCKED_MIME_TYPES = new Set([
   'application/xml'
 ]);
 
+// 禁止的文件扩展名（可能导致代码执行）
+const BLOCKED_EXTENSIONS = new Set([
+  '.php', '.phtml', '.php3', '.php4', '.php5', '.php7', '.phps',
+  '.exe', '.bat', '.cmd', '.com', '.pif', '.scr', '.vbs', '.js',
+  '.sh', '.bash', '.zsh', '.csh',
+  '.asp', '.aspx', '.jsp', '.jspx', '.jspf',
+  '.jar', '.war', '.ear',
+  '.htaccess', '.htpasswd', '.htgroups',
+  '.zip', '.rar', '.7z', '.tar', '.gz',  // 压缩包可能包含脚本
+  '.dll', '.so', '.dylib', '.sys',  // 动态库
+  '.app', '.deb', '.rpm', '.dmg',   // 可执行包
+  '.msi', '.msix'                    // Windows 安装程序
+]);
+
 function normalizeContentType(value) {
   return String(value || '')
     .split(';')[0]
@@ -38,7 +52,12 @@ function sanitizeFilename(value) {
   const cleaned = String(value || '')
     .trim()
     .replace(/[/\\]/g, '_')
-    .replace(/[\u0000-\u001F\u007F]/g, '');
+    .split('')
+    .filter((ch) => {
+      const code = ch.charCodeAt(0);
+      return code >= 32 && code !== 127;
+    })
+    .join('');
   return cleaned.slice(0, 180) || 'file';
 }
 
@@ -56,6 +75,16 @@ function validateUpload(env, file) {
   const maxFileSize = Number(env.MAX_FILE_SIZE || 20971520);
   if (file.size > maxFileSize) {
     throw new Error(`文件大小不能超过 ${Math.round(maxFileSize / 1024 / 1024)}MB`);
+  }
+
+  // 检查文件扩展名（第一道防线）
+  const filename = file.name.toLowerCase();
+  const extIndex = filename.lastIndexOf('.');
+  if (extIndex > 0) {
+    const ext = filename.slice(extIndex);
+    if (BLOCKED_EXTENSIONS.has(ext)) {
+      throw new Error(`不允许上传 ${ext} 文件`);
+    }
   }
 
   const contentType = normalizeContentType(file.type);

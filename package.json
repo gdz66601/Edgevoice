@@ -10,7 +10,8 @@
 		"biome:write": "biome check --write .",
 		"biome:check": "biome check .",
 		"biome:ci": "biome ci .",
-		"check": "npm run biome:ci && npm run build",
+		"test": "node tests/validation.test.js",
+		"check": "npm run biome:ci && npm run test && npm run build",
 		"deploy": "npm run build && wrangler deploy",
 		"d1:apply": "wrangler d1 execute cfchat-db --file ./worker/schema.sql"
 	},

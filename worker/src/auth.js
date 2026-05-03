@@ -72,6 +72,7 @@ export async function putSession(env, session) {
 
 export async function createSession(env, user) {
   const token = toBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+  const now = Date.now();
   const session = {
     token,
     userId: Number(user.id),
@@ -79,7 +80,9 @@ export async function createSession(env, user) {
     displayName: user.display_name,
     avatarUrl: user.avatar_key ? `/files/${encodeURIComponent(user.avatar_key)}` : '',
     isAdmin: isAdminUser(env, user),
-    sessionVersion: toSessionVersion(user.session_version)
+    sessionVersion: toSessionVersion(user.session_version),
+    createdAt: now,  // 添加创建时间戳用于验证
+    expiresAt: now + (SESSION_TTL_SECONDS * 1000)  // 过期时间
   };
 
   await putSession(env, session);
@@ -98,6 +101,13 @@ export async function getSession(env, token) {
   }
 
   const session = JSON.parse(raw);
+
+  // 验证会话是否已过期（双重检查）
+  if (session.expiresAt && Date.now() > session.expiresAt) {
+    // 会话已过期，删除它
+    await deleteSession(env, token);
+    return null;
+  }
   session.token = token;
   if (session.sessionVersion === undefined) {
     session.sessionVersion = 0;

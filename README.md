@@ -1,162 +1,107 @@
-<div align="center">
-  <img src="Edgechat.png" alt="Edgechat 标志" />
-</div>
+# Edgechat
 
-[GitHub 仓库](https://github.com/gdz66601/Edgechat) · [项目文档](https://doc.chsm666.top/) · [开源协议（GPL v3 或更高版本）](https://www.gnu.org/licenses/gpl-3.0)
+一个部署在 Cloudflare 基础设施上的实时聊天系统。
 
-EdgeChat 是一个部署在 Cloudflare 上的聊天系统，提供账号体系、公开群组、私有群组、私信、实时消息、文件上传和管理员后台，目标是在 Cloudflare 生态中以较低运维成本实现一套可直接落地的站内 IM。
+**版本：** v2.0.0
+**状态：** 生产就绪
+**许可证：** GPL-3.0-or-later
 
-本项目采用 `GPL-3.0-or-later` 协议，详见 [LICENSE](LICENSE)。
+## 项目概述
 
-<img width="2198" height="1932" alt="项目界面截图" src="https://i.chsm666.top/file/1777177920568_photo_2026-04-26_12-30-51.jpg" />
+Edgechat 是一个功能完整的即时通讯系统，专为部署在 Cloudflare 全球基础设施上而设计。
+
+它支持用户账号、公开频道、私有频道、私信、实时消息同步、文件管理以及管理员后台，适合用于团队内部沟通、私有社区和轻量级站内即时通讯场景。
 
 ## 功能特性
 
-- 管理员创建用户，不开放自助注册
-- 支持公开群组、私有群组与私信会话
-- 群主管理成员，管理员可查看任意群组和私信消息
-- 支持实时消息与历史消息分页
-- 支持文件上传与头像管理
-- 后台包含用户管理、消息查看、网站设置三个子页面
-- 支持消息检索、成员邀请、文件发送
-- 支持定时硬删除过期消息
+- 用户账号系统：仅支持管理员创建用户，不开放自由注册
+- 支持公开频道、私有频道和一对一私信
+- 基于 WebSocket 的实时消息同步
+- 支持分页消息历史记录和消息搜索
+- 支持文件上传和头像管理
+- 提供管理员后台，包括用户管理、消息查看和站点设置
+- 完整的管理员操作审计日志
+- XSS 防护和请求限流
 
 ## 技术栈
 
-- 前端：Vue 3、Vue Router、Vite
-- 后端：Cloudflare Workers、Hono
-- 实时层：Durable Objects WebSocket Hibernation
-- 数据库：Cloudflare D1
-- 会话：Cloudflare KV
-- 文件：Cloudflare R2
-- 部署：Wrangler、GitHub Actions
-
-## 部署
-
-### GitHub Actions 自动部署
-
-推荐优先使用 GitHub Actions 部署，适合长期维护和生产环境更新。
-
-- 快速开始：<https://doc.chsm666.top/guide/getting-started.html>
-- 详细教程：<https://doc.chsm666.top/guide/actions-deploy.html>
-
-仓库内已提供 `.github/workflows/deploy-worker.yml`，推送到 `master` 或 `main`，或手动触发 `workflow_dispatch` 后即可执行自动部署。
-
-### 手动部署
-
-如果你希望本地手动部署，完整步骤、资源准备和注意事项请查看文档站教程：
-
-- 手动部署教程：<https://doc.chsm666.top/guide/getting-started.html>
-- 文档首页：<https://doc.chsm666.top/>
+- **前端：** Vue 3、Vue Router、Vite
+- **后端：** Cloudflare Workers、Hono
+- **实时通信：** Durable Objects + WebSocket Hibernation
+- **数据库：** Cloudflare D1（SQLite）
+- **会话管理：** Cloudflare KV
+- **文件存储：** Cloudflare R2
+- **部署工具：** Wrangler、GitHub Actions
 
 ## 快速开始
 
-### 安装依赖
+### 环境要求
+
+- Node.js v18.17.0 或更高版本
+- npm 10.2.3 或更高版本
+- 已启用 Workers、D1、KV 和 R2 的 Cloudflare 账号
+
+### 本地开发
 
 ```bash
+# 安装依赖
 npm install
+
+# 启动前端开发服务器
+cd frontend && npm run dev
+
+# 启动后端 Worker 开发服务器（在另一个终端中运行）
+cd worker && npm run dev
 ```
 
-### 前端开发
+### 部署
 
-```bash
-npm run dev:frontend
-```
+完整部署说明请参考：
 
-### 本地构建
+[docs/06_DEPLOYMENT.md](docs/06_DEPLOYMENT.md)
 
 ```bash
 npm run build
-```
-
-### 本地手动发布
-
-```bash
+npm run d1:apply
 npm run deploy
 ```
 
-在非交互环境下部署时，需要提前设置 `CLOUDFLARE_API_TOKEN`。
+## 项目文档
 
-PowerShell 示例：
+完整文档位于 `docs/` 目录中：
 
-```powershell
-$env:CLOUDFLARE_API_TOKEN = "your-token"
-npm run deploy
-```
+1. [00_README.md](docs/00_README.md) - 文档索引
+2. [01_PRD.md](docs/01_PRD.md) - 产品需求文档
+3. [02_TECH_STACK.md](docs/02_TECH_STACK.md) - 技术栈说明
+4. [03_ARCHITECTURE.md](docs/03_ARCHITECTURE.md) - 系统架构
+5. [04_BACKEND_STRUCTURE.md](docs/04_BACKEND_STRUCTURE.md) - API 与数据库结构
+6. [05_SECURITY.md](docs/05_SECURITY.md) - 安全与合规说明
+7. [06_DEPLOYMENT.md](docs/06_DEPLOYMENT.md) - 部署指南
+8. [07_TEST_PLAN.md](docs/07_TEST_PLAN.md) - 测试策略
+9. [08_OPERATIONS.md](docs/08_OPERATIONS.md) - 运维与监控
 
-## 环境变量
+建议先阅读：
 
-当前项目使用以下变量：
+[docs/00_README.md](docs/00_README.md)
 
-```toml
-[vars]
-MESSAGE_RETENTION_DAYS = "7"
-ALLOWED_FILE_TYPES = "image/,video/,application/pdf,text/"
-MAX_FILE_SIZE = "20971520"
-```
+## 安全性
 
-变量说明：
+v2.0.0 版本包含较为完整的安全加固措施：
 
-- `MESSAGE_RETENTION_DAYS`：消息保留天数
-- `ALLOWED_FILE_TYPES`：允许上传的 MIME 前缀
-- `MAX_FILE_SIZE`：单文件大小上限（字节）
+- 使用 HttpOnly Cookie 管理会话
+- CORS 白名单校验
+- 基于输入清理的 XSS 防护
+- 使用参数化查询防止 SQL 注入
+- 文件上传校验与扩展名黑名单
+- WebSocket 消息限流
+- 对所有管理员操作记录审计日志
+- 基于时间戳的会话过期机制
 
-管理员身份通过数据库字段 `users.is_admin` 控制。
+完整安全说明请参考：
 
-## Cloudflare 资源依赖
+[docs/05_SECURITY.md](docs/05_SECURITY.md)
 
-- `D1`：用户、群组、成员关系、消息
-- `KV`：登录会话
-- `R2`：聊天附件、头像
-- `Durable Objects`：聊天室 WebSocket 房间
-- `Static Assets`：托管前端产物
-- `Cron Triggers`：定时清理过期消息
-
-## 项目结构
-
-```text
-cfchat/
-├─ frontend/
-│  ├─ src/
-│  │  ├─ api.js
-│  │  ├─ router.js
-│  │  ├─ store.js
-│  │  ├─ ws.js
-│  │  ├─ styles.css
-│  │  ├─ components/ui/
-│  │  └─ pages/
-│  └─ vite.config.js
-├─ worker/
-│  ├─ schema.sql
-│  ├─ migrations/
-│  └─ src/
-│     ├─ index.js
-│     ├─ auth.js
-│     ├─ db.js
-│     ├─ middleware.js
-│     ├─ utils.js
-│     ├─ api/
-│     └─ do/
-├─ wrangler.toml
-├─ package.json
-├─ README.md
-└─ LICENSE
-```
-
-## 请求与成本优化
-
-项目已做了多项针对 Cloudflare 计费模型的优化：
-
-- 静态资源不再手动 `ASSETS.fetch()`，由平台自动处理
-- `run_worker_first` 仅作用于 `"/api/*"` 与 `"/files/*"`
-- 消息清理改为原生 `scheduled`，并对过期消息执行硬删除，不再通过每个请求触发调度型 DO
-- `/files/:key` 返回 `Cache-Control`、`ETag` 与 `Last-Modified`
-- 聊天页初始化聚合为 `/api/bootstrap`
-- 后台概览聚合为 `/api/admin/overview`
-
-更多说明可查看：<https://doc.chsm666.top/guide/optimization.html>
-
-## 后台页面
+## 管理后台页面
 
 - `/admin/users`：用户管理
 - `/admin/messages`：消息查看
@@ -164,11 +109,20 @@ cfchat/
 
 ## 贡献
 
-欢迎提交 Issue 和 Pull Request，一起完善 EdgeChat。
+欢迎为 Edgechat 贡献代码、文档或问题反馈。
+
+在开始开发前，请先阅读 `docs/` 目录中的相关文档。
+
+你可以通过以下方式参与：
+
+- 提交 Issue 反馈问题或建议
+- 提交 Pull Request 改进功能或修复问题
+- 完善文档和部署说明
+- 协助测试安全性和兼容性
 
 ## 贡献者
 
-感谢所有为项目提供帮助的贡献者：
+感谢所有为本项目提供帮助的贡献者：
 
 [![贡献者](https://contrib.rocks/image?repo=gdz66601/Edgechat)](https://github.com/gdz66601/Edgechat/graphs/contributors)
 
@@ -176,8 +130,12 @@ cfchat/
 
 感谢 <a href="https://linux.do" target="_blank">linux do</a> 在推广方面为本项目做出的贡献。
 
-## 协议说明
+## 许可证
 
-本项目采用 `GNU GPL v3.0 or later`。
+Edgechat 基于 `GNU GPL v3.0 or later` 协议开源。
 
-你可以使用、修改和分发本项目；如果你分发修改版本，需要继续提供对应源代码，并保持 GPL 兼容。
+你可以使用、修改和分发本项目；如果你分发修改后的版本，需要继续提供对应源代码，并保持 GPL 协议兼容。
+
+详情请参见：
+
+[LICENSE](LICENSE)

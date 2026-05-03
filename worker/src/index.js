@@ -23,10 +23,31 @@ import { errorResponse, parseJsonRequest, publicFileUrl } from './utils.js';
 
 const app = new Hono();
 
+// CORS 配置：限制到特定的来源列表
+function getAllowedOrigins(env) {
+  const originsStr = env.ALLOWED_ORIGINS || '';
+  if (!originsStr) return [];
+  return originsStr.split(',').map(origin => origin.trim()).filter(Boolean);
+}
+
+function resolveCorsOrigin(origin, c) {
+  if (!origin) return '';
+
+  const requestOrigin = new URL(c.req.url).origin;
+  if (origin === requestOrigin) {
+    return origin;
+  }
+
+  const allowedOrigins = getAllowedOrigins(c.env);
+  return allowedOrigins.includes(origin) ? origin : '';
+}
+
 app.use('/api/*', cors({
-  origin: '*',
-  allowHeaders: ['Content-Type', 'Authorization'],
-  allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']
+  origin: resolveCorsOrigin,
+  allowHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
+  allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  credentials: true,
+  maxAge: 3600
 }));
 
 app.get('/api/health', (c) => c.json({ ok: true }));
@@ -146,9 +167,25 @@ app.post('/api/auth/login', async (c) => {
   }
 
   const session = await createSession(c.env, user);
+
+  // 设置 HttpOnly Cookie 以防止 XSS 窃取
+  const isSecure = c.req.url.startsWith('https://');
+  c.cookie('cfchat_token', session.token, {
+    httpOnly: true,
+    secure: isSecure, // HTTPS 环境下强制使用
+    sameSite: 'Strict', // 防止 CSRF
+    maxAge: 60 * 60 * 24 * 7 // 7 天
+  });
+
+  // 返回会话信息，但不返回令牌（令牌在 cookie 中）
   return c.json({
-    token: session.token,
-    session
+    session: {
+      userId: session.userId,
+      username: session.username,
+      displayName: session.displayName,
+      avatarUrl: session.avatarUrl,
+      isAdmin: session.isAdmin
+    }
   });
 });
 
@@ -184,6 +221,13 @@ app.get('/api/auth/session', async (c) => {
 app.post('/api/auth/logout', async (c) => {
   const session = c.get('session');
   await deleteSession(c.env, session.token);
+
+  // 清除 HttpOnly Cookie
+  c.cookie('cfchat_token', '', {
+    httpOnly: true,
+    maxAge: 0 // 立即过期
+  });
+
   return c.json({ ok: true });
 });
 

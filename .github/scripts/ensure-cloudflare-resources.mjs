@@ -104,9 +104,8 @@ async function listD1Databases() {
     const records = Array.isArray(payload.result) ? payload.result.map(normalizeD1Record) : [];
     all.push(...records);
 
-    const resultInfo = payload.result_info;
     const reachedLastPage =
-      !resultInfo || !resultInfo.total_pages || Number(page) >= Number(resultInfo.total_pages);
+      !payload.result_info?.total_pages || Number(page) >= Number(payload.result_info?.total_pages);
     if (reachedLastPage) {
       break;
     }
@@ -130,8 +129,7 @@ async function listKvNamespaces() {
     const records = Array.isArray(payload.result) ? payload.result.map(normalizeKvRecord) : [];
     all.push(...records);
 
-    const resultInfo = payload.result_info;
-    const noMorePages = !resultInfo || !resultInfo.total_pages || page >= resultInfo.total_pages;
+    const noMorePages = !payload.result_info?.total_pages || page >= payload.result_info?.total_pages;
     if (noMorePages) {
       break;
     }

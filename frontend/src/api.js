@@ -2,17 +2,16 @@ const API_PREFIX = '/api';
 const AUTH_INVALID_EVENT = 'cfchat:auth-invalid';
 
 function buildHeaders(extra = {}) {
-  const headers = { ...extra };
-  const token = localStorage.getItem('cfchat.token');
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-  return headers;
+  // 令牌现在自动在 HttpOnly Cookie 中发送，无需手动处理
+  // 浏览器会自动在所有跨域请求中包含 credentials
+  return { ...extra };
 }
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_PREFIX}${path}`, {
     ...options,
+    // 包含凭证以确保 HttpOnly Cookie 被发送
+    credentials: 'include',
     headers: buildHeaders(options.headers),
     body:
       options.body instanceof FormData || typeof options.body === 'string'
@@ -150,10 +149,8 @@ export default {
     });
   },
   getRoomWebSocketUrl(kind, roomId) {
-    const token = localStorage.getItem('cfchat.token');
     const url = new URL(`/api/ws/${kind}/${roomId}`, window.location.origin);
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-    url.searchParams.set('token', token || '');
     return url.toString();
   },
   adminUsers() {

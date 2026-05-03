@@ -6,7 +6,6 @@ const DEFAULT_SITE_ICON_URL = '/logo.svg';
 
 const state = reactive({
   ready: false,
-  token: localStorage.getItem('cfchat.token') || '',
   session: null,
   site: {
     siteName: 'Edgechat',
@@ -15,8 +14,6 @@ const state = reactive({
 });
 
 function clearAuthState() {
-  localStorage.removeItem('cfchat.token');
-  state.token = '';
   state.session = null;
 }
 
@@ -55,11 +52,6 @@ async function initialize() {
 
   await loadSite();
 
-  if (!state.token) {
-    state.ready = true;
-    return;
-  }
-
   try {
     const payload = await api.session();
     state.session = payload.session;
@@ -72,17 +64,13 @@ async function initialize() {
 
 async function login(credentials) {
   const payload = await api.login(credentials);
-  state.token = payload.token;
   state.session = payload.session;
   state.ready = true;
-  localStorage.setItem('cfchat.token', payload.token);
 }
 
 async function logout() {
   try {
-    if (state.token) {
-      await api.logout();
-    }
+    await api.logout();
   } finally {
     clearAuthState();
   }
@@ -109,9 +97,6 @@ if (typeof window !== 'undefined') {
 export default {
   get ready() {
     return state.ready;
-  },
-  get token() {
-    return state.token;
   },
   get session() {
     return state.session;

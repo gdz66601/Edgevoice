@@ -1,7 +1,8 @@
 import { hashPassword } from '../auth.js';
-import { getSiteSettings, listMessages, requireAccessibleRoom, updateSiteSettings } from '../db.js';
+import { getSiteSettings, listMessages, requireAccessibleRoom, updateSiteSettings, getUserById } from '../db.js';
 import { ApiError } from '../errors.js';
 import { errorResponse, parseJsonRequest, randomToken, sanitizeLimit } from '../utils.js';
+import { logAdminAction } from '../audit.js';
 
 export function registerAdminRoutes(app) {
   app.get('/api/admin/overview', async (c) => {
@@ -284,41 +285,129 @@ export function registerAdminRoutes(app) {
   });
 
   app.post('/api/admin/users/:userId/reset-password', async (c) => {
+    const session = c.get('session');
     const userId = Number(c.req.param('userId'));
     const payload = await parseJsonRequest(c.req.raw);
     const password = String(payload.password || '');
+
+    // 验证新密码
     if (!password) {
       return errorResponse('新密码不能为空');
+    }
+
+    if (password.length < 8) {
+      return errorResponse('密码长度至少8个字符');
+    }
+
+    // 防止自我锁定
+    if (userId === session.userId) {
+      return errorResponse('无法重置自己的密码，请使用修改密码功能');
+    }
+
+    // 获取目标用户信息
+    const targetUser = await getUserById(c.env.DB, userId);
+    if (!targetUser) {
+      return errorResponse('用户不存在', 404);
+    }
+
+    // 防止降级权限（非超级管理员不能重置管理员密码）
+    if (Number(targetUser.is_admin)) {
+      // 只有超级管理员（由环境变量定义）才能重置管理员密码
+      const isSuperAdmin = String(c.env.ADMIN_USERNAMES || '').toLowerCase()
+        .split(',')
+        .map(u => u.trim())
+        .filter(Boolean)
+        .includes(session.username.toLowerCase());
+
+      if (!isSuperAdmin) {
+        return errorResponse('无权重置管理员密码', 403);
+      }
     }
 
     const hashed = await hashPassword(password);
     await c.env.DB.prepare(
       `UPDATE users
        SET password_hash = ?,
-            password_salt = ?,
-            session_version = session_version + 1,
-            updated_at = CURRENT_TIMESTAMP
+           password_salt = ?,
+           session_version = session_version + 1,
+           updated_at = CURRENT_TIMESTAMP
        WHERE id = ?
          AND deleted_at IS NULL`
     )
       .bind(hashed.hash, hashed.salt, userId)
       .run();
 
+    // 记录审计日志
+    await logAdminAction(
+      c.env.DB,
+      session.userId,
+      'reset_password',
+      'user',
+      userId,
+      {
+        targetUsername: targetUser.username,
+        reason: payload.reason || ''
+      },
+      c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for'),
+      c.req.header('user-agent')
+    );
+
     return c.json({ ok: true });
   });
 
   app.delete('/api/admin/users/:userId', async (c) => {
+    const session = c.get('session');
     const userId = Number(c.req.param('userId'));
+
+    // 防止删除自己
+    if (userId === session.userId) {
+      return errorResponse('无法删除自己的账号');
+    }
+
+    // 获取目标用户信息
+    const targetUser = await getUserById(c.env.DB, userId);
+    if (!targetUser) {
+      return errorResponse('用户不存在', 404);
+    }
+
+    // 防止删除超级管理员
+    if (Number(targetUser.is_admin)) {
+      const isSuperAdmin = String(c.env.ADMIN_USERNAMES || '').toLowerCase()
+        .split(',')
+        .map(u => u.trim())
+        .filter(Boolean)
+        .includes(session.username.toLowerCase());
+
+      if (!isSuperAdmin) {
+        return errorResponse('无权删除管理员账号', 403);
+      }
+    }
+
     await c.env.DB.prepare(
       `UPDATE users
        SET deleted_at = CURRENT_TIMESTAMP,
-            is_disabled = 1,
-            session_version = session_version + 1,
-            updated_at = CURRENT_TIMESTAMP
+           is_disabled = 1,
+           session_version = session_version + 1,
+           updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`
     )
       .bind(userId)
       .run();
+
+    // 记录审计日志
+    await logAdminAction(
+      c.env.DB,
+      session.userId,
+      'delete_user',
+      'user',
+      userId,
+      {
+        targetUsername: targetUser.username,
+        targetDisplayName: targetUser.display_name
+      },
+      c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for'),
+      c.req.header('user-agent')
+    );
 
     return c.json({ ok: true });
   });

@@ -17,6 +17,32 @@ function sendSocketError(ws, message) {
   }
 }
 
+function getMessageByteLength(message) {
+  if (typeof message === 'string') {
+    return new TextEncoder().encode(message).length;
+  }
+  if (message instanceof ArrayBuffer) {
+    return message.byteLength;
+  }
+  if (ArrayBuffer.isView(message)) {
+    return message.byteLength;
+  }
+  return 0;
+}
+
+function normalizeWebSocketMessage(message) {
+  if (typeof message === 'string') {
+    return message;
+  }
+  if (message instanceof ArrayBuffer) {
+    return new TextDecoder().decode(message);
+  }
+  if (ArrayBuffer.isView(message)) {
+    return new TextDecoder().decode(message);
+  }
+  return '';
+}
+
 async function revalidateConnection(env, meta) {
   const auth = await validateSession(env, meta.session.token);
   if (!auth.ok) {
@@ -43,6 +69,12 @@ export class ChannelRoom {
     this.env = env;
     this.connections = new Map();
 
+    // 添加速率限制和大小检查配置
+    this.messageRateLimits = new Map(); // userId -> {count, resetAt}
+    this.MESSAGE_SIZE_LIMIT = 10 * 1024; // 10KB
+    this.RATE_LIMIT_PER_SECOND = 10;     // 每秒最多 10 条消息
+    this.RATE_LIMIT_WINDOW = 1000;       // 1 秒
+
     for (const socket of this.state.getWebSockets()) {
       const meta = socket.deserializeAttachment();
       if (meta) {
@@ -58,7 +90,32 @@ export class ChannelRoom {
     } catch {
       // Ignore.
     }
+    this.removeConnection(ws);
+  }
+
+  removeConnection(ws) {
+    const meta = this.connections.get(ws);
     this.connections.delete(ws);
+
+    const userId = meta?.session?.userId;
+    if (!userId) {
+      return;
+    }
+
+    const hasOtherConnection = Array.from(this.connections.values()).some(
+      (storedMeta) => storedMeta?.session?.userId === userId
+    );
+    if (!hasOtherConnection) {
+      this.messageRateLimits.delete(userId);
+    }
+  }
+
+  cleanupExpiredRateLimits(now = Date.now()) {
+    for (const [userId, counter] of this.messageRateLimits.entries()) {
+      if (!counter || now > counter.resetAt) {
+        this.messageRateLimits.delete(userId);
+      }
+    }
   }
 
   async ensureAuthorized(ws, meta) {
@@ -83,19 +140,35 @@ export class ChannelRoom {
     }
   }
 
+  // 修复：创建连接快照以避免迭代中修改集合导致的竞态条件
   async broadcast(packet) {
-    for (const [socket, storedMeta] of this.connections.entries()) {
-      const authorized = await this.ensureAuthorized(socket, storedMeta);
-      if (!authorized) {
-        continue;
-      }
+    // 创建当前连接的快照，避免在循环中修改 Map 时出现迭代问题
+    const connectionSnapshot = Array.from(this.connections.entries());
 
-      try {
-        socket.send(packet);
-      } catch {
-        this.connections.delete(socket);
-      }
-    }
+    // 并发处理所有连接，使用 Promise.allSettled 避免单个失败影响其他连接
+    const results = await Promise.allSettled(
+      connectionSnapshot.map(async ([socket, storedMeta]) => {
+        try {
+          const authorized = await this.ensureAuthorized(socket, storedMeta);
+          if (!authorized) {
+            return; // 未授权，跳过此连接
+          }
+
+          try {
+            socket.send(packet);
+          } catch (error) {
+            // 发送失败，删除此连接
+            this.removeConnection(socket);
+            throw error;
+          }
+        } catch (error) {
+          console.error('Broadcast error:', error);
+          // 继续处理其他连接，不中断
+        }
+      })
+    );
+
+    return results; // 返回结果用于监控/日志
   }
 
   async fetch(request) {
@@ -152,12 +225,44 @@ export class ChannelRoom {
       return;
     }
 
+    // 检查消息大小限制
+    if (getMessageByteLength(message) > this.MESSAGE_SIZE_LIMIT) {
+      sendSocketError(ws, `消息过大，最大 ${Math.round(this.MESSAGE_SIZE_LIMIT / 1024)}KB`);
+      return;
+    }
+
     const nextMeta = await this.ensureAuthorized(ws, meta);
     if (!nextMeta) {
       return;
     }
 
-    const payload = this.parsePayload(ws, message);
+    // 检查速率限制
+    const now = Date.now();
+    this.cleanupExpiredRateLimits(now);
+    const userId = nextMeta.session.userId;
+    let counter = this.messageRateLimits.get(userId) || {
+      count: 0,
+      resetAt: now + this.RATE_LIMIT_WINDOW
+    };
+
+    // 重置时间窗口
+    if (now > counter.resetAt) {
+      counter = {
+        count: 0,
+        resetAt: now + this.RATE_LIMIT_WINDOW
+      };
+    }
+
+    // 检查是否超过速率限制
+    if (counter.count >= this.RATE_LIMIT_PER_SECOND) {
+      sendSocketError(ws, '消息发送过于频繁，请稍后再试');
+      return;
+    }
+
+    counter.count++;
+    this.messageRateLimits.set(userId, counter);
+
+    const payload = this.parsePayload(ws, normalizeWebSocketMessage(message));
     if (!payload) {
       return;
     }
@@ -186,10 +291,10 @@ export class ChannelRoom {
   }
 
   webSocketClose(ws) {
-    this.connections.delete(ws);
+    this.removeConnection(ws);
   }
 
   webSocketError(ws) {
-    this.connections.delete(ws);
+    this.removeConnection(ws);
   }
 }
