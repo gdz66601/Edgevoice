@@ -9,8 +9,7 @@ import AdminMessagesPage from './pages/AdminMessagesPage.vue';
 import AdminSitePage from './pages/AdminSitePage.vue';
 import AdminRoomPage from './pages/AdminRoomPage.vue';
 import SettingsPage from './pages/SettingsPage.vue';
-
-const AUTH_INVALID_EVENT = 'cfchat:auth-invalid';
+import { addAuthInvalidListener } from './auth-storage.js';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -78,7 +77,7 @@ const router = createRouter({
 });
 
 if (typeof window !== 'undefined') {
-  window.addEventListener(AUTH_INVALID_EVENT, () => {
+  addAuthInvalidListener(() => {
     if (router.currentRoute.value.path !== '/login') {
       void router.push('/login');
     }

@@ -1,9 +1,10 @@
+import { dispatchAuthInvalid, getStoredToken } from './auth-storage.js';
+
 const API_PREFIX = '/api';
-const AUTH_INVALID_EVENT = 'cfchat:auth-invalid';
 
 function buildHeaders(extra = {}) {
   const headers = { ...extra };
-  const token = localStorage.getItem('cfchat.token');
+  const token = getStoredToken();
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
@@ -34,11 +35,7 @@ async function request(path, options = {}) {
     error.payload = payload;
 
     if (response.status === 401 && typeof window !== 'undefined') {
-      window.dispatchEvent(
-        new CustomEvent(AUTH_INVALID_EVENT, {
-          detail: { message }
-        })
-      );
+      dispatchAuthInvalid(message);
     }
 
     throw error;
@@ -150,7 +147,7 @@ export default {
     });
   },
   getRoomWebSocketUrl(kind, roomId) {
-    const token = localStorage.getItem('cfchat.token');
+    const token = getStoredToken();
     const url = new URL(`/api/ws/${kind}/${roomId}`, window.location.origin);
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     url.searchParams.set('token', token || '');

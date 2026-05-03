@@ -91,6 +91,8 @@ npm run build                  # 构建
 docker compose exec edgechat wrangler d1 execute cfchat-db --local --file=./worker/schema.sql
 ```
 
+`cfchat-db` is the retained legacy D1 database name. Keep using it unless you are doing a planned data migration.
+
 ## 🎯 特色功能
 
 1. **物理折射**：真实光学模拟

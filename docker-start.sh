@@ -22,6 +22,7 @@ echo ""
 
 # 初始化数据库
 echo "📊 初始化数据库..."
+# Keep the legacy local D1 name to match existing Wrangler state.
 docker compose exec -T edgechat wrangler d1 execute cfchat-db --local --file=./worker/schema.sql > /dev/null 2>&1
 
 if [ $? -eq 0 ]; then

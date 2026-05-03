@@ -115,7 +115,7 @@ MAX_FILE_SIZE = "20971520"
 ## 项目结构
 
 ```text
-cfchat/
+edgechat/
 ├─ frontend/
 │  ├─ src/
 │  │  ├─ api.js

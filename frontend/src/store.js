@@ -1,12 +1,17 @@
 import { reactive } from 'vue';
 import api from './api.js';
+import {
+  addAuthInvalidListener,
+  clearStoredToken,
+  getStoredToken,
+  setStoredToken
+} from './auth-storage.js';
 
-const AUTH_INVALID_EVENT = 'cfchat:auth-invalid';
 const DEFAULT_SITE_ICON_URL = '/logo.svg';
 
 const state = reactive({
   ready: false,
-  token: localStorage.getItem('cfchat.token') || '',
+  token: getStoredToken(),
   session: null,
   site: {
     siteName: 'Edgechat',
@@ -15,7 +20,7 @@ const state = reactive({
 });
 
 function clearAuthState() {
-  localStorage.removeItem('cfchat.token');
+  clearStoredToken();
   state.token = '';
   state.session = null;
 }
@@ -75,7 +80,7 @@ async function login(credentials) {
   state.token = payload.token;
   state.session = payload.session;
   state.ready = true;
-  localStorage.setItem('cfchat.token', payload.token);
+  setStoredToken(payload.token);
 }
 
 async function logout() {
@@ -101,7 +106,7 @@ function setSite(site) {
 }
 
 if (typeof window !== 'undefined') {
-  window.addEventListener(AUTH_INVALID_EVENT, () => {
+  addAuthInvalidListener(() => {
     clearAuthState();
   });
 }

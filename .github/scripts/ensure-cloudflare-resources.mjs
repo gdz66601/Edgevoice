@@ -15,9 +15,28 @@ for (const key of requiredEnv) {
 const apiToken = process.env.CLOUDFLARE_API_TOKEN;
 const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 
-const d1DatabaseName = process.env.CFCHAT_D1_DATABASE_NAME ?? "cfchat-db";
-const kvNamespaceTitle = process.env.CFCHAT_KV_NAMESPACE_TITLE ?? "cfchat-sessions";
-const r2BucketName = process.env.CFCHAT_R2_BUCKET_NAME ?? "cfchat-files";
+const LEGACY_D1_DATABASE_NAME = "cfchat-db";
+const LEGACY_KV_NAMESPACE_TITLE = "cfchat-sessions";
+const LEGACY_R2_BUCKET_NAME = "cfchat-files";
+
+function readEnv(...names) {
+  for (const name of names) {
+    const value = process.env[name];
+    if (value) {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
+const d1DatabaseName =
+  readEnv("EDGECHAT_D1_DATABASE_NAME", "CFCHAT_D1_DATABASE_NAME") ?? LEGACY_D1_DATABASE_NAME;
+const kvNamespaceTitle =
+  readEnv("EDGECHAT_KV_NAMESPACE_TITLE", "CFCHAT_KV_NAMESPACE_TITLE") ??
+  LEGACY_KV_NAMESPACE_TITLE;
+const r2BucketName =
+  readEnv("EDGECHAT_R2_BUCKET_NAME", "CFCHAT_R2_BUCKET_NAME") ?? LEGACY_R2_BUCKET_NAME;
 
 function setOutput(name, value) {
   const stringValue = String(value);
@@ -106,7 +125,7 @@ async function listD1Databases() {
 
     const resultInfo = payload.result_info;
     const reachedLastPage =
-      !resultInfo || !resultInfo.total_pages || Number(page) >= Number(resultInfo.total_pages);
+      !resultInfo?.total_pages || Number(page) >= Number(resultInfo.total_pages);
     if (reachedLastPage) {
       break;
     }
@@ -131,7 +150,7 @@ async function listKvNamespaces() {
     all.push(...records);
 
     const resultInfo = payload.result_info;
-    const noMorePages = !resultInfo || !resultInfo.total_pages || page >= resultInfo.total_pages;
+    const noMorePages = !resultInfo?.total_pages || page >= resultInfo.total_pages;
     if (noMorePages) {
       break;
     }
@@ -206,6 +225,9 @@ async function ensureR2Bucket() {
 async function main() {
   console.log("Ensuring Cloudflare resources for production deployment...");
   console.log(`Target account: ${accountId}`);
+  console.log(
+    "Using legacy Cloudflare resource names by default to avoid creating a second production stack.",
+  );
 
   const d1 = await ensureD1Database();
   const kv = await ensureKvNamespace();

@@ -37,6 +37,8 @@ docker compose up -d --build
 docker compose exec edgechat wrangler d1 execute cfchat-db --local --file=./worker/schema.sql
 ```
 
+`cfchat-db` is the retained legacy D1 database name. Keep using it unless you are doing a planned data migration.
+
 ### 3. 创建管理员账户
 
 ```bash

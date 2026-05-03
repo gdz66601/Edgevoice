@@ -1,8 +1,8 @@
 import { computed, nextTick, ref } from "vue";
 import api from "../api.js";
+import { dispatchAuthInvalid } from "../auth-storage.js";
 import { connectRoomSocket } from "../ws.js";
 
-const AUTH_INVALID_EVENT = "cfchat:auth-invalid";
 const WS_CLOSE_UNAUTHORIZED = 4401;
 const WS_CLOSE_FORBIDDEN = 4403;
 const WS_REASON_UNAUTHORIZED = "session_invalid";
@@ -150,13 +150,7 @@ export function useChatRoom({
 	}
 
 	function emitAuthInvalid(message) {
-		if (typeof window !== "undefined") {
-			window.dispatchEvent(
-				new CustomEvent(AUTH_INVALID_EVENT, {
-					detail: { message },
-				}),
-			);
-		}
+		dispatchAuthInvalid(message);
 	}
 
 	function handleRoomAccessRevoked() {
