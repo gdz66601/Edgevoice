@@ -96,6 +96,18 @@ export function useChatRoom({
 		}
 	}
 
+	async function markActiveRoomRead(messageId = null) {
+		if (!activeRoom.value) {
+			return;
+		}
+
+		try {
+			await api.markRoomRead(activeRoom.value.kind, activeRoom.value.id, messageId);
+		} catch {
+			// Keep the room usable even if read-state sync fails.
+		}
+	}
+
 	async function loadMessages(before = null, append = false) {
 		if (!activeRoom.value) {
 			return;
@@ -115,6 +127,9 @@ export function useChatRoom({
 			await nextTick();
 			if (!append) {
 				scrollToBottom();
+				const latestMessageId = payload.messages.at(-1)?.id ?? null;
+				await markActiveRoomRead(latestMessageId);
+				void refreshSidebar();
 			}
 		} catch (currentError) {
 			error.value = currentError.message;
@@ -242,6 +257,10 @@ export function useChatRoom({
 					}
 					messages.value = [...messages.value, payload.message];
 					nextTick().then(scrollToBottom);
+					if (!isOwnMessage(payload.message)) {
+						void markActiveRoomRead(payload.message.id);
+					}
+					void refreshSidebar();
 				}
 				if (payload.type === "error") {
 					error.value = payload.error;

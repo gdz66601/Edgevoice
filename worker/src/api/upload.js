@@ -38,7 +38,12 @@ function sanitizeFilename(value) {
   const cleaned = String(value || '')
     .trim()
     .replace(/[/\\]/g, '_')
-    .replace(/[\u0000-\u001F\u007F]/g, '');
+    .split('')
+    .filter((char) => {
+      const code = char.charCodeAt(0);
+      return code > 31 && code !== 127;
+    })
+    .join('');
   return cleaned.slice(0, 180) || 'file';
 }
 

@@ -136,7 +136,8 @@
         <h2>2. 实时预览 (Live Preview)</h2>
         <p>将鼠标移动到下方的卡片上查看动态折射与高光效果：</p>
         <div class="preview-zone">
-            <svg style="display:none">
+            <svg style="display:none" aria-hidden="true" focusable="false">
+                <title>Refraction preview filter</title>
                 <filter id="refraction">
                     <feTurbulence type="fractalNoise" baseFrequency="0.01" numOctaves="2" result="noise" />
                     <feDisplacementMap in="SourceGraphic" in2="noise" scale="30" />

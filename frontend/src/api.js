@@ -128,6 +128,13 @@ export default {
     }
     return request(`/messages?${query.toString()}`);
   },
+  markRoomRead(kind, roomId, messageId = null) {
+    return request('/messages/read', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: { kind, roomId, messageId }
+    });
+  },
   openDm(userId) {
     return request('/dm/open', {
       method: 'POST',

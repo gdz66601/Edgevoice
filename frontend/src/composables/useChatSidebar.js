@@ -38,6 +38,7 @@ export function useChatSidebar({ error, applyActiveChannel, selectDm }) {
 			avatarUrl: dm.otherUser.avatarUrl,
 			fallback: dm.otherUser.displayName,
 			lastMessageAt: dm.lastMessageAt || "",
+			unreadCount: Number(dm.unreadCount || 0),
 			source: dm,
 		}));
 
@@ -53,6 +54,7 @@ export function useChatSidebar({ error, applyActiveChannel, selectDm }) {
 			avatarUrl: channel.avatarUrl || "",
 			fallback: channel.name ? channel.name.slice(0, 1) : "群",
 			lastMessageAt: channel.lastMessageAt || "",
+			unreadCount: Number(channel.unreadCount || 0),
 			source: channel,
 		}));
 
@@ -120,6 +122,10 @@ export function useChatSidebar({ error, applyActiveChannel, selectDm }) {
 	}
 
 	async function openConversation(item) {
+		if (item?.source) {
+			item.source.unreadCount = 0;
+		}
+
 		if (item.kind === "dm") {
 			selectDm(item.source);
 			return;

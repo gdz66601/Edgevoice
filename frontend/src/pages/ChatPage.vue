@@ -14,6 +14,7 @@ import { useChatViewport } from '../composables/useChatViewport.js';
 import store from '../store.js';
 
 const MEMBER_PANEL_RESTORE_DELAY = 240;
+const SIDEBAR_REFRESH_INTERVAL = 10000;
 
 const router = useRouter();
 const error = ref('');
@@ -131,6 +132,7 @@ const chatAppClasses = computed(() => ({
   'chat-app--mobile-chat': isMobileViewport.value && mobileView.value === 'chat'
 }));
 let memberPanelRestoreTimer = null;
+let sidebarRefreshTimer = null;
 
 function isChannelRoomKey(roomKey) {
   return roomKey.startsWith('public:') || roomKey.startsWith('private:');
@@ -140,6 +142,32 @@ function clearMemberPanelRestoreTimer() {
   if (memberPanelRestoreTimer) {
     clearTimeout(memberPanelRestoreTimer);
     memberPanelRestoreTimer = null;
+  }
+}
+
+function formatUnreadCount(value) {
+  const count = Number(value || 0);
+  if (count <= 0) {
+    return '';
+  }
+  return count > 99 ? '99+' : String(count);
+}
+
+async function refreshSidebarIfVisible() {
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+    return;
+  }
+
+  try {
+    await refreshSidebar();
+  } catch (currentError) {
+    error.value = currentError.message;
+  }
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    void refreshSidebarIfVisible();
   }
 }
 
@@ -207,12 +235,21 @@ watch(activeRoomKey, async (roomKey, previousRoomKey) => {
 onMounted(() => {
   syncViewportState();
   window.addEventListener('resize', syncViewportState);
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  sidebarRefreshTimer = window.setInterval(() => {
+    void refreshSidebarIfVisible();
+  }, SIDEBAR_REFRESH_INTERVAL);
   void bootstrap();
 });
 
 onBeforeUnmount(() => {
   clearMemberPanelRestoreTimer();
   window.removeEventListener('resize', syncViewportState);
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
+  if (sidebarRefreshTimer) {
+    clearInterval(sidebarRefreshTimer);
+    sidebarRefreshTimer = null;
+  }
   disconnectSocket();
 });
 </script>
@@ -334,7 +371,12 @@ onBeforeUnmount(() => {
                 :class="{ 'chat-list-item--active': activeRoomKey === item.key }"
                 @click="openConversation(item)"
               >
-                <UiAvatar :src="item.avatarUrl" :fallback="item.fallback" />
+                <div class="chat-list-item__avatar">
+                  <UiAvatar :src="item.avatarUrl" :fallback="item.fallback" />
+                  <span v-if="item.unreadCount" class="chat-list-item__unread">
+                    {{ formatUnreadCount(item.unreadCount) }}
+                  </span>
+                </div>
                 <div class="chat-list-item__body">
                   <div class="chat-list-item__head">
                     <strong>{{ item.title }}</strong>

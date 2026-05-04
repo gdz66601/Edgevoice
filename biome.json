@@ -8,6 +8,7 @@
 	"files": {
 		"includes": [
 			"**",
+			"!biome-report.json",
 			"!dist",
 			"!frontend/dist",
 			"!**/generated",
@@ -19,6 +20,10 @@
   },
 	"linter": {
 		"enabled": true,
+		"includes": [
+			"**",
+			"!frontend/src/styles.css"
+		],
 		"rules": {
 			"recommended": true
 		}

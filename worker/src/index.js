@@ -338,7 +338,21 @@ app.get('/api/bootstrap', async (c) => {
            SELECT MAX(m.created_at)
            FROM messages m
            WHERE m.channel_id = c.id AND m.deleted_at IS NULL
-         ) AS last_message_at
+         ) AS last_message_at,
+         (
+           SELECT COUNT(*)
+           FROM messages m
+           WHERE m.channel_id = c.id
+             AND m.deleted_at IS NULL
+             AND m.sender_id != ?
+             AND m.id > COALESCE((
+               SELECT cr.last_read_message_id
+               FROM channel_reads cr
+               WHERE cr.channel_id = c.id
+                 AND cr.user_id = ?
+               LIMIT 1
+             ), 0)
+         ) AS unread_count
        FROM channels c
        LEFT JOIN users owner ON owner.id = c.created_by
        WHERE c.kind IN ('public', 'private')
@@ -352,7 +366,14 @@ app.get('/api/bootstrap', async (c) => {
          )
        ORDER BY CASE c.kind WHEN 'public' THEN 0 ELSE 1 END, c.name ASC`
     )
-      .bind(session.userId, session.userId, session.userId, session.userId)
+      .bind(
+        session.userId,
+        session.userId,
+        session.userId,
+        session.userId,
+        session.userId,
+        session.userId
+      )
       .all(),
     c.env.DB.prepare(
       `SELECT
@@ -366,7 +387,21 @@ app.get('/api/bootstrap', async (c) => {
            SELECT MAX(m.created_at)
            FROM messages m
            WHERE m.channel_id = c.id AND m.deleted_at IS NULL
-         ) AS last_message_at
+         ) AS last_message_at,
+         (
+           SELECT COUNT(*)
+           FROM messages m
+           WHERE m.channel_id = c.id
+             AND m.deleted_at IS NULL
+             AND m.sender_id != ?
+             AND m.id > COALESCE((
+               SELECT cr.last_read_message_id
+               FROM channel_reads cr
+               WHERE cr.channel_id = c.id
+                 AND cr.user_id = ?
+               LIMIT 1
+             ), 0)
+         ) AS unread_count
        FROM channels c
        JOIN channel_members me ON me.channel_id = c.id AND me.user_id = ?
        JOIN channel_members peer ON peer.channel_id = c.id AND peer.user_id != ?
@@ -376,7 +411,7 @@ app.get('/api/bootstrap', async (c) => {
          AND other.deleted_at IS NULL
        ORDER BY last_message_at DESC NULLS LAST, c.id DESC`
     )
-      .bind(session.userId, session.userId)
+      .bind(session.userId, session.userId, session.userId, session.userId)
       .all()
   ]);
 
@@ -399,13 +434,15 @@ app.get('/api/bootstrap', async (c) => {
       myRole: row.my_role || '',
       canManage: Boolean(Number(row.can_manage)),
       memberCount: Number(row.member_count || 0),
-      lastMessageAt: row.last_message_at || null
+      lastMessageAt: row.last_message_at || null,
+      unreadCount: Number(row.unread_count || 0)
     })),
     dms: dmsResult.results.map((row) => ({
       id: Number(row.id),
       kind: 'dm',
       name: row.dm_key,
       lastMessageAt: row.last_message_at || null,
+      unreadCount: Number(row.unread_count || 0),
       otherUser: {
         id: Number(row.other_user_id),
         username: row.other_username,

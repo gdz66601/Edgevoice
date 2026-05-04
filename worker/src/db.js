@@ -232,6 +232,66 @@ export async function listMessages(db, roomId, before = null, limit = 30) {
     .reverse();
 }
 
+export async function markChannelRead(db, channelId, userId, messageId = null) {
+  const latestMessageId =
+    messageId === null || messageId === undefined
+      ? null
+      : Math.max(0, Number(messageId) || 0);
+
+  await db
+    .prepare(
+      `INSERT INTO channel_reads (
+         channel_id,
+         user_id,
+         last_read_message_id,
+         last_read_at
+       )
+       VALUES (
+         ?,
+         ?,
+         COALESCE(
+           ?,
+           (
+             SELECT COALESCE(MAX(m.id), 0)
+             FROM messages m
+             WHERE m.channel_id = ?
+               AND m.deleted_at IS NULL
+           )
+         ),
+         CURRENT_TIMESTAMP
+       )
+       ON CONFLICT(channel_id, user_id) DO UPDATE
+       SET last_read_message_id = CASE
+             WHEN excluded.last_read_message_id > channel_reads.last_read_message_id
+               THEN excluded.last_read_message_id
+             ELSE channel_reads.last_read_message_id
+           END,
+           last_read_at = CASE
+             WHEN excluded.last_read_message_id > channel_reads.last_read_message_id
+               THEN CURRENT_TIMESTAMP
+             ELSE channel_reads.last_read_at
+           END`
+    )
+    .bind(Number(channelId), Number(userId), latestMessageId, Number(channelId))
+    .run();
+
+  const { results } = await db
+    .prepare(
+      `SELECT last_read_message_id, last_read_at
+       FROM channel_reads
+       WHERE channel_id = ?
+         AND user_id = ?
+       LIMIT 1`
+    )
+    .bind(Number(channelId), Number(userId))
+    .all();
+
+  return {
+    lastReadMessageId: Number(results[0]?.last_read_message_id || 0),
+    lastReadAt: results[0]?.last_read_at || null
+  };
+}
+
 export async function insertMessage(db, { channelId, senderId, content, attachment }) {
   const cleanAttachment = pickAttachment(attachment);
   const cleanContent = String(content || '').trim();

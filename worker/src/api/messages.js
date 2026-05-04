@@ -1,4 +1,4 @@
-import { listMessages, requireAccessibleRoom } from '../db.js';
+import { listMessages, markChannelRead, requireAccessibleRoom } from '../db.js';
 import { errorResponse, sanitizeLimit } from '../utils.js';
 
 export function registerMessageRoutes(app) {
@@ -10,7 +10,7 @@ export function registerMessageRoutes(app) {
     const limit = sanitizeLimit(c.req.query('limit'));
 
     if (!['public', 'private', 'dm'].includes(kind) || !Number.isFinite(roomId)) {
-      return errorResponse('参数无效');
+      return errorResponse('Invalid parameters');
     }
 
     const room = await requireAccessibleRoom(
@@ -22,7 +22,7 @@ export function registerMessageRoutes(app) {
     );
 
     if (!room) {
-      return errorResponse('无权访问该会话', 403);
+      return errorResponse('Room not accessible', 403);
     }
 
     const messages = await listMessages(c.env.DB, roomId, before, limit);
@@ -34,6 +34,47 @@ export function registerMessageRoutes(app) {
         description: room.description
       },
       messages
+    });
+  });
+
+  app.post('/api/messages/read', async (c) => {
+    const session = c.get('session');
+    const payload = await c.req.json().catch(() => null);
+    const kind = payload?.kind;
+    const roomId = Number(payload?.roomId);
+    const messageId =
+      payload?.messageId === null || payload?.messageId === undefined
+        ? null
+        : Number(payload.messageId);
+
+    if (!['public', 'private', 'dm'].includes(kind) || !Number.isFinite(roomId)) {
+      return errorResponse('Invalid parameters');
+    }
+
+    if (messageId !== null && !Number.isFinite(messageId)) {
+      return errorResponse('Invalid parameters');
+    }
+
+    const room = await requireAccessibleRoom(
+      c.env.DB,
+      session.userId,
+      kind,
+      roomId,
+      session.isAdmin
+    );
+
+    if (!room) {
+      return errorResponse('Room not accessible', 403);
+    }
+
+    const readState = await markChannelRead(c.env.DB, roomId, session.userId, messageId);
+    return c.json({
+      ok: true,
+      room: {
+        id: Number(room.id),
+        kind: room.kind
+      },
+      ...readState
     });
   });
 }

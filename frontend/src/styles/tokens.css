@@ -381,6 +381,36 @@
   overflow: hidden;
 }
 
+.chat-list-item__avatar {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat-list-item__unread {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  background: linear-gradient(180deg, #56a8ff, #2f7dff);
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(47, 125, 255, 0.26);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+  z-index: 1;
+}
+
 .chat-list-item:hover {
   background: rgba(255, 255, 255, 0.16);
 }
