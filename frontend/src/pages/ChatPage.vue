@@ -201,10 +201,6 @@ async function bootstrap() {
     await refreshSidebar();
     connectInbox();
     syncViewportState();
-    const preferredRoom = conversationItems.value[0] || null;
-    if (preferredRoom && !isMobileViewport.value) {
-      await handleOpenConversation(preferredRoom);
-    }
   } catch (currentError) {
     error.value = currentError.message;
   }
