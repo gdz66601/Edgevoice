@@ -8,7 +8,7 @@ import {
   putSession,
   verifyPassword
 } from './auth.js';
-import { getSiteSettings, getUserByUsername } from './db.js';
+import { ensureChannelReadsSchema, getSiteSettings, getUserByUsername } from './db.js';
 import { ApiError } from './errors.js';
 import { adminMiddleware, authMiddleware } from './middleware.js';
 import { registerAdminRoutes } from './api/admin.js';
@@ -296,6 +296,7 @@ app.get('/api/users', async (c) => {
 
 app.get('/api/bootstrap', async (c) => {
   const session = c.get('session');
+  await ensureChannelReadsSchema(c.env.DB);
   const [usersResult, channelsResult, dmsResult] = await Promise.all([
     c.env.DB.prepare(
       `SELECT id, username, display_name, avatar_key
