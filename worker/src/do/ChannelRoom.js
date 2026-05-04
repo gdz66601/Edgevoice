@@ -1,4 +1,10 @@
-import { insertMessage, requireAccessibleRoom } from '../db.js';
+import {
+  getConversationSummaryForUser,
+  insertMessage,
+  listChannelMemberUserIds,
+  requireAccessibleRoom
+} from '../db.js';
+import { publishUserInboxEvent } from './UserInbox.js';
 import { validateSession } from '../session.js';
 import { pickAttachment } from '../utils.js';
 
@@ -180,6 +186,25 @@ export class ChannelRoom {
       });
 
       await this.broadcast(packet);
+
+      const memberUserIds = await listChannelMemberUserIds(this.env.DB, nextMeta.room.id);
+      const summaries = await Promise.all(
+        memberUserIds.map(async (userId) => ({
+          userId,
+          summary: await getConversationSummaryForUser(this.env.DB, userId, nextMeta.room.id)
+        }))
+      );
+
+      await Promise.all(
+        summaries
+          .filter((entry) => entry.summary)
+          .map((entry) =>
+            publishUserInboxEvent(this.env, entry.userId, {
+              type: 'conversation_update',
+              conversation: entry.summary
+            })
+          )
+      );
     } catch (error) {
       ws.send(JSON.stringify({ type: 'error', error: error.message || '发送失败' }));
     }

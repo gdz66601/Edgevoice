@@ -18,6 +18,7 @@ import { registerMessageRoutes } from './api/messages.js';
 import { registerUploadRoutes } from './api/upload.js';
 import { ChannelRoom } from './do/ChannelRoom.js';
 import { Scheduler } from './do/Scheduler.js';
+import { UserInbox } from './do/UserInbox.js';
 import { runScheduledGc } from './gc.js';
 import { errorResponse, parseJsonRequest, publicFileUrl } from './utils.js';
 
@@ -462,6 +463,15 @@ registerUploadRoutes(app);
 registerChannelRoutes(app);
 registerAdminRoutes(app);
 
+app.get('/api/ws/inbox', async (c) => {
+  const session = c.get('session');
+  const stub = c.env.USER_INBOX.get(c.env.USER_INBOX.idFromName(`user:${Number(session.userId)}`));
+  const url = new URL(c.req.url);
+  url.pathname = '/connect';
+  url.searchParams.set('token', session.token);
+  return stub.fetch(url.toString(), c.req.raw);
+});
+
 app.get('/api/ws/:kind/:id', async (c) => {
   const session = c.get('session');
   const kind = c.req.param('kind');
@@ -500,4 +510,4 @@ export default {
     ctx.waitUntil(runScheduledGc(env));
   }
 };
-export { ChannelRoom, Scheduler };
+export { ChannelRoom, Scheduler, UserInbox };

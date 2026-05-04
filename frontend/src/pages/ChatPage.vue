@@ -14,7 +14,6 @@ import { useChatViewport } from '../composables/useChatViewport.js';
 import store from '../store.js';
 
 const MEMBER_PANEL_RESTORE_DELAY = 240;
-const SIDEBAR_REFRESH_INTERVAL = 10000;
 
 const router = useRouter();
 const error = ref('');
@@ -63,6 +62,9 @@ const {
   toggleQuickActions,
   setQuickActionMode,
   refreshSidebar,
+  connectInbox,
+  disconnectInbox,
+  applyConversationRead,
   openConversation: openConversationInternal,
   openDmWithUser: openDmWithUserInternal,
   createGroup
@@ -119,6 +121,7 @@ const {
   session,
   error,
   refreshSidebar,
+  applyConversationRead,
   canManageActiveRoom,
   syncGroupSettingsForm,
   groupSettingsForm,
@@ -132,7 +135,6 @@ const chatAppClasses = computed(() => ({
   'chat-app--mobile-chat': isMobileViewport.value && mobileView.value === 'chat'
 }));
 let memberPanelRestoreTimer = null;
-let sidebarRefreshTimer = null;
 
 function isChannelRoomKey(roomKey) {
   return roomKey.startsWith('public:') || roomKey.startsWith('private:');
@@ -153,6 +155,14 @@ function formatUnreadCount(value) {
   return count > 99 ? '99+' : String(count);
 }
 
+function visibleUnreadCount(item) {
+  if (!item) {
+    return 0;
+  }
+
+  return activeRoomKey.value === item.key ? 0 : Number(item.unreadCount || 0);
+}
+
 async function refreshSidebarIfVisible() {
   if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
     return;
@@ -167,6 +177,7 @@ async function refreshSidebarIfVisible() {
 
 function handleVisibilityChange() {
   if (document.visibilityState === 'visible') {
+    connectInbox();
     void refreshSidebarIfVisible();
   }
 }
@@ -188,6 +199,7 @@ async function bootstrap() {
   error.value = '';
   try {
     await refreshSidebar();
+    connectInbox();
     syncViewportState();
     const preferredRoom = conversationItems.value[0] || null;
     if (preferredRoom && !isMobileViewport.value) {
@@ -236,9 +248,6 @@ onMounted(() => {
   syncViewportState();
   window.addEventListener('resize', syncViewportState);
   document.addEventListener('visibilitychange', handleVisibilityChange);
-  sidebarRefreshTimer = window.setInterval(() => {
-    void refreshSidebarIfVisible();
-  }, SIDEBAR_REFRESH_INTERVAL);
   void bootstrap();
 });
 
@@ -246,10 +255,7 @@ onBeforeUnmount(() => {
   clearMemberPanelRestoreTimer();
   window.removeEventListener('resize', syncViewportState);
   document.removeEventListener('visibilitychange', handleVisibilityChange);
-  if (sidebarRefreshTimer) {
-    clearInterval(sidebarRefreshTimer);
-    sidebarRefreshTimer = null;
-  }
+  disconnectInbox();
   disconnectSocket();
 });
 </script>
@@ -373,8 +379,8 @@ onBeforeUnmount(() => {
               >
                 <div class="chat-list-item__avatar">
                   <UiAvatar :src="item.avatarUrl" :fallback="item.fallback" />
-                  <span v-if="item.unreadCount" class="chat-list-item__unread">
-                    {{ formatUnreadCount(item.unreadCount) }}
+                  <span v-if="visibleUnreadCount(item)" class="chat-list-item__unread">
+                    {{ formatUnreadCount(visibleUnreadCount(item)) }}
                   </span>
                 </div>
                 <div class="chat-list-item__body">

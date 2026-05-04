@@ -1,8 +1,6 @@
 import api from './api.js';
 
-export function connectRoomSocket({ kind, roomId, onMessage, onStatus }) {
-  const socket = new WebSocket(api.getRoomWebSocketUrl(kind, roomId));
-
+function attachSocketListeners(socket, { onMessage, onStatus }) {
   socket.addEventListener('open', () => {
     onStatus?.({ status: 'open', socket });
   });
@@ -31,4 +29,14 @@ export function connectRoomSocket({ kind, roomId, onMessage, onStatus }) {
   });
 
   return socket;
+}
+
+export function connectRoomSocket({ kind, roomId, onMessage, onStatus }) {
+  const socket = new WebSocket(api.getRoomWebSocketUrl(kind, roomId));
+  return attachSocketListeners(socket, { onMessage, onStatus });
+}
+
+export function connectInboxSocket({ onMessage, onStatus }) {
+  const socket = new WebSocket(api.getInboxWebSocketUrl());
+  return attachSocketListeners(socket, { onMessage, onStatus });
 }

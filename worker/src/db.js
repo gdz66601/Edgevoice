@@ -232,6 +232,23 @@ export async function listMessages(db, roomId, before = null, limit = 30) {
     .reverse();
 }
 
+export async function listChannelMemberUserIds(db, channelId) {
+  const { results } = await db
+    .prepare(
+      `SELECT cm.user_id
+       FROM channel_members cm
+       JOIN users u ON u.id = cm.user_id
+       WHERE cm.channel_id = ?
+         AND u.deleted_at IS NULL
+         AND u.is_disabled = 0
+       ORDER BY cm.user_id ASC`
+    )
+    .bind(Number(channelId))
+    .all();
+
+  return results.map((row) => Number(row.user_id));
+}
+
 export async function ensureChannelReadsSchema(db) {
   await db.batch([
     db.prepare(
@@ -313,6 +330,181 @@ export async function markChannelRead(db, channelId, userId, messageId = null) {
     lastReadMessageId: Number(results[0]?.last_read_message_id || 0),
     lastReadAt: results[0]?.last_read_at || null
   };
+}
+
+function mapChannelConversationSummary(row) {
+  return {
+    key: `${row.kind}:${Number(row.id)}`,
+    id: Number(row.id),
+    kind: row.kind,
+    title: row.name,
+    subtitle:
+      row.kind === 'public' && !Number(row.is_member)
+        ? '公开群组 · 点击加入'
+        : `群主 ${row.owner_display_name || '未知'}`,
+    avatarUrl: row.avatar_key ? publicFileUrl(row.avatar_key) : '',
+    fallback: row.name ? String(row.name).slice(0, 1) : '群',
+    lastMessageAt: row.last_message_at || null,
+    unreadCount: Number(row.unread_count || 0),
+    name: row.name,
+    description: row.description || '',
+    avatarKey: row.avatar_key || '',
+    ownerDisplayName: row.owner_display_name || '',
+    isMember: Boolean(Number(row.is_member)),
+    myRole: row.my_role || '',
+    canManage: Boolean(Number(row.can_manage)),
+    memberCount: Number(row.member_count || 0)
+  };
+}
+
+function mapDmConversationSummary(row) {
+  const avatarUrl = row.other_avatar_key ? publicFileUrl(row.other_avatar_key) : '';
+  return {
+    key: `dm:${Number(row.id)}`,
+    id: Number(row.id),
+    kind: 'dm',
+    title: row.other_display_name,
+    subtitle: `联系人 @${row.other_username}`,
+    avatarUrl,
+    fallback: row.other_display_name,
+    lastMessageAt: row.last_message_at || null,
+    unreadCount: Number(row.unread_count || 0),
+    name: row.dm_key,
+    otherUser: {
+      id: Number(row.other_user_id),
+      username: row.other_username,
+      displayName: row.other_display_name,
+      avatarUrl
+    }
+  };
+}
+
+export async function getConversationSummaryForUser(db, userId, roomId) {
+  await ensureChannelReadsSchema(db);
+
+  const room = await getChannelById(db, roomId);
+  if (!room) {
+    return null;
+  }
+
+  if (room.kind === 'dm') {
+    const { results } = await db
+      .prepare(
+        `SELECT
+           c.id,
+           c.dm_key,
+           other.id AS other_user_id,
+           other.username AS other_username,
+           other.display_name AS other_display_name,
+           other.avatar_key AS other_avatar_key,
+           (
+             SELECT MAX(m.created_at)
+             FROM messages m
+             WHERE m.channel_id = c.id AND m.deleted_at IS NULL
+           ) AS last_message_at,
+           (
+             SELECT COUNT(*)
+             FROM messages m
+             WHERE m.channel_id = c.id
+               AND m.deleted_at IS NULL
+               AND m.sender_id != ?
+               AND m.id > COALESCE((
+                 SELECT cr.last_read_message_id
+                 FROM channel_reads cr
+                 WHERE cr.channel_id = c.id
+                   AND cr.user_id = ?
+                 LIMIT 1
+               ), 0)
+           ) AS unread_count
+         FROM channels c
+         JOIN channel_members me ON me.channel_id = c.id AND me.user_id = ?
+         JOIN channel_members peer ON peer.channel_id = c.id AND peer.user_id != ?
+         JOIN users other ON other.id = peer.user_id
+         WHERE c.id = ?
+           AND c.kind = 'dm'
+           AND c.deleted_at IS NULL
+           AND other.deleted_at IS NULL
+         LIMIT 1`
+      )
+      .bind(Number(userId), Number(userId), Number(userId), Number(userId), Number(roomId))
+      .all();
+
+    return results[0] ? mapDmConversationSummary(results[0]) : null;
+  }
+
+  const { results } = await db
+    .prepare(
+      `SELECT
+         c.id,
+         c.name,
+         c.description,
+         c.avatar_key,
+         c.kind,
+         owner.display_name AS owner_display_name,
+         EXISTS (
+           SELECT 1 FROM channel_members cm
+           WHERE cm.channel_id = c.id AND cm.user_id = ?
+         ) AS is_member,
+         COALESCE((
+           SELECT cm.role
+           FROM channel_members cm
+           WHERE cm.channel_id = c.id AND cm.user_id = ?
+           LIMIT 1
+         ), '') AS my_role,
+         EXISTS (
+           SELECT 1 FROM channel_members cm
+           WHERE cm.channel_id = c.id AND cm.user_id = ? AND cm.role = 'owner'
+         ) AS can_manage,
+         (
+           SELECT COUNT(*)
+           FROM channel_members cm
+           WHERE cm.channel_id = c.id
+         ) AS member_count,
+         (
+           SELECT MAX(m.created_at)
+           FROM messages m
+           WHERE m.channel_id = c.id AND m.deleted_at IS NULL
+         ) AS last_message_at,
+         (
+           SELECT COUNT(*)
+           FROM messages m
+           WHERE m.channel_id = c.id
+             AND m.deleted_at IS NULL
+             AND m.sender_id != ?
+             AND m.id > COALESCE((
+               SELECT cr.last_read_message_id
+               FROM channel_reads cr
+               WHERE cr.channel_id = c.id
+                 AND cr.user_id = ?
+               LIMIT 1
+             ), 0)
+         ) AS unread_count
+       FROM channels c
+       LEFT JOIN users owner ON owner.id = c.created_by
+       WHERE c.id = ?
+         AND c.kind IN ('public', 'private')
+         AND c.deleted_at IS NULL
+         AND (
+           c.kind = 'public'
+           OR EXISTS (
+             SELECT 1 FROM channel_members cm
+             WHERE cm.channel_id = c.id AND cm.user_id = ?
+           )
+         )
+       LIMIT 1`
+    )
+    .bind(
+      Number(userId),
+      Number(userId),
+      Number(userId),
+      Number(userId),
+      Number(userId),
+      Number(roomId),
+      Number(userId)
+    )
+    .all();
+
+  return results[0] ? mapChannelConversationSummary(results[0]) : null;
 }
 
 export async function insertMessage(db, { channelId, senderId, content, attachment }) {

@@ -15,6 +15,7 @@ export function useChatRoom({
 	session,
 	error,
 	refreshSidebar,
+	applyConversationRead,
 	canManageActiveRoom,
 	syncGroupSettingsForm,
 	groupSettingsForm,
@@ -97,12 +98,19 @@ export function useChatRoom({
 	}
 
 	async function markActiveRoomRead(messageId = null) {
-		if (!activeRoom.value) {
+		const room = activeRoom.value;
+		if (!room) {
 			return;
 		}
 
 		try {
-			await api.markRoomRead(activeRoom.value.kind, activeRoom.value.id, messageId);
+			await api.markRoomRead(room.kind, room.id, messageId);
+			applyConversationRead?.({
+				key: `${room.kind}:${room.id}`,
+				roomId: room.id,
+				kind: room.kind,
+				unreadCount: 0,
+			});
 		} catch {
 			// Keep the room usable even if read-state sync fails.
 		}
@@ -129,7 +137,6 @@ export function useChatRoom({
 				scrollToBottom();
 				const latestMessageId = payload.messages.at(-1)?.id ?? null;
 				await markActiveRoomRead(latestMessageId);
-				void refreshSidebar();
 			}
 		} catch (currentError) {
 			error.value = currentError.message;
@@ -260,7 +267,6 @@ export function useChatRoom({
 					if (!isOwnMessage(payload.message)) {
 						void markActiveRoomRead(payload.message.id);
 					}
-					void refreshSidebar();
 				}
 				if (payload.type === "error") {
 					error.value = payload.error;

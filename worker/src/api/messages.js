@@ -1,4 +1,5 @@
 import { listMessages, markChannelRead, requireAccessibleRoom } from '../db.js';
+import { publishUserInboxEvent } from '../do/UserInbox.js';
 import { errorResponse, sanitizeLimit } from '../utils.js';
 
 export function registerMessageRoutes(app) {
@@ -68,6 +69,14 @@ export function registerMessageRoutes(app) {
     }
 
     const readState = await markChannelRead(c.env.DB, roomId, session.userId, messageId);
+    await publishUserInboxEvent(c.env, session.userId, {
+      type: 'conversation_read',
+      key: `${kind}:${roomId}`,
+      roomId,
+      kind,
+      unreadCount: 0
+    });
+
     return c.json({
       ok: true,
       room: {

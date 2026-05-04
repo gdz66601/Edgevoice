@@ -160,6 +160,13 @@ export default {
     url.searchParams.set('token', token || '');
     return url.toString();
   },
+  getInboxWebSocketUrl() {
+    const token = getStoredToken();
+    const url = new URL('/api/ws/inbox', window.location.origin);
+    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    url.searchParams.set('token', token || '');
+    return url.toString();
+  },
   adminUsers() {
     return request('/admin/users');
   },
