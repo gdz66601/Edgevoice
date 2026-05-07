@@ -71,6 +71,17 @@ function contentDispositionValue(kind, filename) {
   return `${kind}; filename="${safeAscii}"; filename*=UTF-8''${encodeURIComponent(safeUtf8)}`;
 }
 
+function safeObjectExtension(filename) {
+  const value = String(filename || '');
+  const extIndex = value.lastIndexOf('.');
+  if (extIndex <= 0) {
+    return '';
+  }
+
+  const extension = value.slice(extIndex).toLowerCase();
+  return /^\.[a-z0-9]{1,16}$/.test(extension) ? extension : '';
+}
+
 function validateUpload(env, file) {
   const maxFileSize = Number(env.MAX_FILE_SIZE || 20971520);
   if (file.size > maxFileSize) {
@@ -117,7 +128,7 @@ export function registerUploadRoutes(app) {
       return errorResponse(error.message);
     }
 
-    const extension = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
+    const extension = safeObjectExtension(file.name);
     const key = `${session.userId}/${Date.now()}-${crypto.randomUUID()}${extension}`;
     await c.env.FILES.put(key, await file.arrayBuffer(), {
       httpMetadata: {

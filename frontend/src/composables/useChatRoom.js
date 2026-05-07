@@ -1,5 +1,10 @@
 import { computed, nextTick, ref } from "vue";
 import api from "../api.js";
+import {
+	decryptMessageContent,
+	encryptMessageContent,
+	isEncryptedMessageContent,
+} from "../e2ee.js";
 import { connectRoomSocket } from "../ws.js";
 
 const AUTH_INVALID_EVENT = "cfchat:auth-invalid";
@@ -27,6 +32,8 @@ export function useChatRoom({
 	const wsStatus = ref("closed");
 	const composerText = ref("");
 	const pendingAttachment = ref(null);
+	const roomPassphrase = ref("");
+	const blockedWords = ref([]);
 	const sending = ref(false);
 	const inviteSubmitting = ref(false);
 	const groupSettingsSaving = ref(false);
@@ -38,6 +45,94 @@ export function useChatRoom({
 	const inviteUserId = ref("");
 	let roomSocket = null;
 	let expectSocketClose = false;
+
+	const activeRoomStorageKey = computed(() => {
+		const room = activeRoom.value;
+		return room ? `edgechat:e2ee:${room.kind}:${room.id}` : "";
+	});
+
+	const e2eeEnabled = computed(() => Boolean(roomPassphrase.value));
+	const e2eeStatusText = computed(() =>
+		e2eeEnabled.value ? "端对端加密已启用" : "未启用端对端加密",
+	);
+
+	function currentRoomKey() {
+		const room = activeRoom.value;
+		return room ? `${room.kind}:${room.id}` : "";
+	}
+
+	function loadRoomPassphrase() {
+		const key = activeRoomStorageKey.value;
+		if (!key || typeof localStorage === "undefined") {
+			roomPassphrase.value = "";
+			return;
+		}
+		roomPassphrase.value = localStorage.getItem(key) || "";
+	}
+
+	function saveRoomPassphrase(value) {
+		roomPassphrase.value = String(value || "");
+		const key = activeRoomStorageKey.value;
+		if (!key || typeof localStorage === "undefined") {
+			return;
+		}
+		if (roomPassphrase.value) {
+			localStorage.setItem(key, roomPassphrase.value);
+		} else {
+			localStorage.removeItem(key);
+		}
+		void refreshCurrentMessages();
+	}
+
+	function clearRoomPassphrase() {
+		saveRoomPassphrase("");
+	}
+
+	function findLocalBlockedWord(content) {
+		const normalized = String(content || "").toLowerCase();
+		return blockedWords.value.find((word) => normalized.includes(word)) || "";
+	}
+
+	async function loadBlockedWords() {
+		try {
+			const payload = await api.getBlockedWords();
+			blockedWords.value = Array.isArray(payload.words) ? payload.words : [];
+		} catch {
+			blockedWords.value = [];
+		}
+	}
+
+	async function decorateMessage(message) {
+		const content = String(message?.content || "");
+		if (!isEncryptedMessageContent(content)) {
+			return {
+				...message,
+				displayContent: content,
+				isEncrypted: false,
+				decryptionFailed: false,
+			};
+		}
+
+		const decrypted = await decryptMessageContent(
+			content,
+			roomPassphrase.value,
+			currentRoomKey(),
+		);
+		return {
+			...message,
+			displayContent: decrypted.content,
+			isEncrypted: true,
+			decryptionFailed: Boolean(decrypted.failed),
+		};
+	}
+
+	async function decorateMessages(nextMessages) {
+		return Promise.all(nextMessages.map((message) => decorateMessage(message)));
+	}
+
+	async function refreshCurrentMessages() {
+		messages.value = await decorateMessages(messages.value);
+	}
 
 	const availableInviteUsers = computed(() => {
 		const memberIds = new Set(
@@ -109,9 +204,10 @@ export function useChatRoom({
 				activeRoom.value.id,
 				before,
 			);
+			const decoratedMessages = await decorateMessages(payload.messages);
 			messages.value = append
-				? [...payload.messages, ...messages.value]
-				: payload.messages;
+				? [...decoratedMessages, ...messages.value]
+				: decoratedMessages;
 			await nextTick();
 			if (!append) {
 				scrollToBottom();
@@ -246,8 +342,10 @@ export function useChatRoom({
 					if (messages.value.some((item) => item.id === payload.message.id)) {
 						return;
 					}
-					messages.value = [...messages.value, payload.message];
-					nextTick().then(scrollToBottom);
+					decorateMessage(payload.message).then((message) => {
+						messages.value = [...messages.value, message];
+						nextTick().then(scrollToBottom);
+					});
 				}
 				if (payload.type === "error") {
 					error.value = payload.error;
@@ -267,13 +365,26 @@ export function useChatRoom({
 			return;
 		}
 
+		const blockedWord = findLocalBlockedWord(composerText.value);
+		if (blockedWord) {
+			error.value = "消息包含违禁词，已被拦截";
+			return;
+		}
+
 		sending.value = true;
 		error.value = "";
 		try {
+			const content = e2eeEnabled.value
+				? await encryptMessageContent(
+						composerText.value,
+						roomPassphrase.value,
+						currentRoomKey(),
+					)
+				: composerText.value;
 			roomSocket.send(
 				JSON.stringify({
 					type: "send",
-					content: composerText.value,
+					content,
 					attachment: pendingAttachment.value,
 				}),
 			);
@@ -393,6 +504,41 @@ export function useChatRoom({
 		}
 	}
 
+	async function muteMember(member) {
+		if (!activeRoom.value || activeRoom.value.kind === "dm") {
+			return;
+		}
+
+		const input = window.prompt(`禁言 ${member.displayName} 多少分钟？`, "30");
+		if (!input) {
+			return;
+		}
+
+		try {
+			const payload = await api.muteChannelMember(
+				activeRoom.value.id,
+				member.id,
+				Number(input),
+			);
+			groupMembers.value = payload.members;
+		} catch (currentError) {
+			error.value = currentError.message;
+		}
+	}
+
+	async function unmuteMember(member) {
+		if (!activeRoom.value || activeRoom.value.kind === "dm") {
+			return;
+		}
+
+		try {
+			const payload = await api.unmuteChannelMember(activeRoom.value.id, member.id);
+			groupMembers.value = payload.members;
+		} catch (currentError) {
+			error.value = currentError.message;
+		}
+	}
+
 	async function deleteGroup() {
 		if (!activeRoom.value || activeRoom.value.kind === "dm") {
 			return;
@@ -484,6 +630,10 @@ export function useChatRoom({
 		wsStatus,
 		composerText,
 		pendingAttachment,
+		roomPassphrase,
+		blockedWords,
+		e2eeEnabled,
+		e2eeStatusText,
 		sending,
 		inviteSubmitting,
 		groupSettingsSaving,
@@ -503,6 +653,10 @@ export function useChatRoom({
 		loadMembers,
 		connectSocket,
 		disconnectSocket,
+		loadRoomPassphrase,
+		loadBlockedWords,
+		saveRoomPassphrase,
+		clearRoomPassphrase,
 		sendMessage,
 		handleComposerKeydown,
 		openFilePicker,
@@ -514,6 +668,8 @@ export function useChatRoom({
 		closeGroupEditor,
 		inviteMember,
 		removeMember,
+		muteMember,
+		unmuteMember,
 		deleteGroup,
 		uploadGroupAvatar,
 		saveGroupSettings,

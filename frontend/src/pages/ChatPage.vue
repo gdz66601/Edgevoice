@@ -79,6 +79,9 @@ const {
   wsStatus,
   composerText,
   pendingAttachment,
+  roomPassphrase,
+  e2eeEnabled,
+  e2eeStatusText,
   sending,
   inviteSubmitting,
   groupSettingsSaving,
@@ -97,6 +100,10 @@ const {
   loadMembers,
   connectSocket,
   disconnectSocket,
+  loadRoomPassphrase,
+  loadBlockedWords,
+  saveRoomPassphrase,
+  clearRoomPassphrase,
   sendMessage,
   handleComposerKeydown,
   openFilePicker,
@@ -108,6 +115,8 @@ const {
   closeGroupEditor,
   inviteMember,
   removeMember,
+  muteMember,
+  unmuteMember,
   deleteGroup,
   uploadGroupAvatar,
   saveGroupSettings
@@ -179,6 +188,10 @@ function openAdmin() {
   router.push('/admin');
 }
 
+function isMemberMuted(member) {
+  return member.mutedUntil && new Date(member.mutedUntil).getTime() > Date.now();
+}
+
 watch(activeRoomKey, async (roomKey, previousRoomKey) => {
   clearMemberPanelRestoreTimer();
   if (!roomKey) {
@@ -190,6 +203,8 @@ watch(activeRoomKey, async (roomKey, previousRoomKey) => {
 
   showGroupEditor.value = false;
   showMemberPanel.value = false;
+  loadRoomPassphrase();
+  await loadBlockedWords();
   await loadMessages();
   await loadMembers();
   connectSocket();
@@ -452,7 +467,12 @@ onBeforeUnmount(() => {
                       <strong>{{ isOwnMessage(message) ? '我' : message.sender.displayName }}</strong>
                       <span>{{ formatTime(message.createdAt) }}</span>
                     </div>
-                    <p v-if="message.content">{{ message.content }}</p>
+                    <p v-if="message.displayContent || message.content">
+                      {{ message.displayContent || message.content }}
+                    </p>
+                    <UiBadge v-if="message.isEncrypted" :variant="message.decryptionFailed ? 'secondary' : 'success'">
+                      {{ message.decryptionFailed ? '加密' : '已解密' }}
+                    </UiBadge>
                     <a
                       v-if="message.attachment"
                       :href="message.attachment.url"
@@ -476,6 +496,25 @@ onBeforeUnmount(() => {
               <label v-if="error" class="error-text chat-composer__error">{{ error }}</label>
 
               <div class="chat-composer">
+                <div class="chat-composer__e2ee">
+                  <span>{{ e2eeStatusText }}</span>
+                  <input
+                    :value="roomPassphrase"
+                    type="password"
+                    autocomplete="off"
+                    placeholder="本会话加密口令"
+                    :disabled="!activeRoom"
+                    @input="saveRoomPassphrase($event.target.value)"
+                  />
+                  <UiButton
+                    variant="ghost"
+                    size="sm"
+                    :disabled="!activeRoom || !e2eeEnabled"
+                    @click="clearRoomPassphrase"
+                  >
+                    关闭
+                  </UiButton>
+                </div>
                 <div class="chat-composer__field">
                   <input ref="fileInputEl" type="file" class="chat-composer__file" @change="uploadAttachment" />
 
@@ -616,6 +655,25 @@ onBeforeUnmount(() => {
                       <UiBadge :variant="member.role === 'owner' ? 'default' : 'secondary'">
                         {{ member.role === 'owner' ? '群主' : '成员' }}
                       </UiBadge>
+                      <UiBadge v-if="isMemberMuted(member)" variant="secondary">
+                        禁言中
+                      </UiBadge>
+                      <UiButton
+                        v-if="canManageActiveRoom && member.role !== 'owner' && !isMemberMuted(member)"
+                        variant="ghost"
+                        size="sm"
+                        @click="muteMember(member)"
+                      >
+                        禁言
+                      </UiButton>
+                      <UiButton
+                        v-if="canManageActiveRoom && member.role !== 'owner' && isMemberMuted(member)"
+                        variant="ghost"
+                        size="sm"
+                        @click="unmuteMember(member)"
+                      >
+                        解禁
+                      </UiButton>
                       <UiButton
                         v-if="canManageActiveRoom && member.role !== 'owner'"
                         variant="ghost"

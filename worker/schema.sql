@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS channel_members (
   user_id INTEGER NOT NULL,
   role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'member')),
   invited_by INTEGER,
+  muted_until TEXT,
   joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (channel_id, user_id),
   FOREIGN KEY (channel_id) REFERENCES channels(id),
@@ -89,6 +90,9 @@ VALUES ('site_name', 'Edgechat');
 
 INSERT OR IGNORE INTO site_settings (setting_key, setting_value)
 VALUES ('site_icon_url', '');
+
+INSERT OR IGNORE INTO site_settings (setting_key, setting_value)
+VALUES ('blocked_words', '[]');
 
 CREATE INDEX IF NOT EXISTS idx_messages_channel_created
   ON messages(channel_id, id DESC);

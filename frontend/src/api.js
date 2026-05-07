@@ -111,6 +111,18 @@ export default {
       method: 'DELETE'
     });
   },
+  muteChannelMember(channelId, userId, minutes) {
+    return request(`/channels/${channelId}/members/${userId}/mute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: { minutes }
+    });
+  },
+  unmuteChannelMember(channelId, userId) {
+    return request(`/channels/${channelId}/members/${userId}/mute`, {
+      method: 'DELETE'
+    });
+  },
   deleteOwnedChannel(channelId) {
     return request(`/channels/${channelId}`, {
       method: 'DELETE'
@@ -129,6 +141,9 @@ export default {
       query.set('before', String(before));
     }
     return request(`/messages?${query.toString()}`);
+  },
+  getBlockedWords() {
+    return request('/moderation/blocked-words');
   },
   openDm(userId) {
     return request('/dm/open', {
@@ -182,6 +197,16 @@ export default {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: payload
+    });
+  },
+  getAdminBlockedWords() {
+    return request('/admin/blocked-words');
+  },
+  updateAdminBlockedWords(words) {
+    return request('/admin/blocked-words', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: { words }
     });
   },
   createUser(payload) {

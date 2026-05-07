@@ -3,6 +3,8 @@ import { getSiteSettings, listMessages, requireAccessibleRoom, updateSiteSetting
 import { ApiError } from '../errors.js';
 import { errorResponse, parseJsonRequest, randomToken, sanitizeLimit } from '../utils.js';
 import { logAdminAction } from '../audit.js';
+import { validateDisplayName, validatePassword, validateUsername } from '../validation.js';
+import { getBlockedWords, updateBlockedWords } from '../moderation.js';
 
 export function registerAdminRoutes(app) {
   app.get('/api/admin/overview', async (c) => {
@@ -107,6 +109,36 @@ export function registerAdminRoutes(app) {
   app.get('/api/admin/site-settings', async (c) => {
     const site = await getSiteSettings(c.env.DB);
     return c.json({ site });
+  });
+
+  app.get('/api/admin/blocked-words', async (c) => {
+    const words = await getBlockedWords(c.env.DB);
+    return c.json({ words });
+  });
+
+  app.patch('/api/admin/blocked-words', async (c) => {
+    const session = c.get('session');
+    const payload = await parseJsonRequest(c.req.raw);
+
+    let words;
+    try {
+      words = await updateBlockedWords(c.env.DB, payload.words || []);
+    } catch (error) {
+      return errorResponse(error.message);
+    }
+
+    await logAdminAction(
+      c.env.DB,
+      session.userId,
+      'update_blocked_words',
+      'site',
+      null,
+      { count: words.length },
+      c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for'),
+      c.req.header('user-agent')
+    );
+
+    return c.json({ words });
   });
 
   app.patch('/api/admin/site-settings', async (c) => {
@@ -236,6 +268,21 @@ export function registerAdminRoutes(app) {
       return errorResponse('用户名和密码不能为空');
     }
 
+    const usernameValidation = validateUsername(username);
+    if (!usernameValidation.valid) {
+      return errorResponse(usernameValidation.error);
+    }
+
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      return errorResponse(passwordValidation.error);
+    }
+
+    const displayNameValidation = validateDisplayName(displayName);
+    if (!displayNameValidation.valid) {
+      return errorResponse(displayNameValidation.error);
+    }
+
     const hashed = await hashPassword(password);
     const result = await c.env.DB.prepare(
       `INSERT INTO users (
@@ -295,8 +342,9 @@ export function registerAdminRoutes(app) {
       return errorResponse('新密码不能为空');
     }
 
-    if (password.length < 8) {
-      return errorResponse('密码长度至少8个字符');
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      return errorResponse(passwordValidation.error);
     }
 
     // 防止自我锁定

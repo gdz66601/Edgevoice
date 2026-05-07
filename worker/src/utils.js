@@ -33,12 +33,29 @@ export function pickAttachment(payload) {
     return null;
   }
 
+  const key = String(payload.key).trim();
+  const name = String(payload.name)
+    .trim()
+    .split('')
+    .filter((ch) => {
+      const code = ch.charCodeAt(0);
+      return code >= 32 && code !== 127;
+    })
+    .join('')
+    .slice(0, 180);
+  const type = String(payload.type).trim().slice(0, 120);
+  const size = Math.max(0, Math.min(Number(payload.size) || 0, 1024 * 1024 * 1024));
+
+  if (!key || !name || !type || key.includes('..') || key.includes('\\')) {
+    return null;
+  }
+
   return {
-    key: String(payload.key),
-    name: String(payload.name),
-    type: String(payload.type),
-    size: Number(payload.size) || 0,
-    url: `/files/${encodeURIComponent(String(payload.key))}`
+    key,
+    name,
+    type,
+    size,
+    url: `/files/${encodeURIComponent(key)}`
   };
 }
 

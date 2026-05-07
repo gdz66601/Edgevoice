@@ -50,6 +50,13 @@ export function sanitizeText(text, options = {}) {
   return result.trim();
 }
 
+const ENCRYPTED_MESSAGE_PREFIX = 'edgechat:e2ee:v1:';
+const ENCRYPTED_MESSAGE_PATTERN = /^edgechat:e2ee:v1:[A-Za-z0-9_-]{24,10000}$/;
+
+export function isEncryptedMessageContent(content) {
+  return typeof content === 'string' && content.startsWith(ENCRYPTED_MESSAGE_PREFIX);
+}
+
 /**
  * 验证用户名
  * @param {string} username - 用户名
@@ -184,6 +191,13 @@ export function validateMessage(content) {
 
   if (trimmed.length > 10000) {
     return { valid: false, error: '消息最多10000个字符', sanitized: '' };
+  }
+
+  if (isEncryptedMessageContent(trimmed)) {
+    if (!ENCRYPTED_MESSAGE_PATTERN.test(trimmed)) {
+      return { valid: false, error: '加密消息格式无效', sanitized: '' };
+    }
+    return { valid: true, sanitized: trimmed };
   }
 
   // 清理内容（防止 XSS）

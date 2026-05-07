@@ -20,8 +20,21 @@ import { ChannelRoom } from './do/ChannelRoom.js';
 import { Scheduler } from './do/Scheduler.js';
 import { runScheduledGc } from './gc.js';
 import { errorResponse, parseJsonRequest, publicFileUrl } from './utils.js';
+import { validateDisplayName, validatePassword, validateUsername } from './validation.js';
+import { getBlockedWords } from './moderation.js';
 
 const app = new Hono();
+
+app.use('*', async (c, next) => {
+  await next();
+  c.header('x-content-type-options', 'nosniff');
+  c.header('referrer-policy', 'no-referrer');
+  c.header('x-frame-options', 'DENY');
+  c.header('permissions-policy', 'camera=(), microphone=(), geolocation=()');
+  if (new URL(c.req.url).pathname.startsWith('/api/')) {
+    c.header('cache-control', 'no-store');
+  }
+});
 
 // CORS 配置：限制到特定的来源列表
 function getAllowedOrigins(env) {
@@ -101,6 +114,21 @@ app.post('/api/register-links/:token/register', async (c) => {
     return errorResponse('用户名和密码不能为空');
   }
 
+  const usernameValidation = validateUsername(username);
+  if (!usernameValidation.valid) {
+    return errorResponse(usernameValidation.error);
+  }
+
+  const passwordValidation = validatePassword(password);
+  if (!passwordValidation.valid) {
+    return errorResponse(passwordValidation.error);
+  }
+
+  const displayNameValidation = validateDisplayName(displayName);
+  if (!displayNameValidation.valid) {
+    return errorResponse(displayNameValidation.error);
+  }
+
   const inviteQuery = await c.env.DB.prepare(
     `SELECT id, consumed_at, deleted_at
      FROM registration_invites
@@ -134,7 +162,7 @@ app.post('/api/register-links/:token/register', async (c) => {
       throw error;
     });
 
-  await c.env.DB.prepare(
+  const consume = await c.env.DB.prepare(
     `UPDATE registration_invites
      SET consumed_by_user_id = ?,
          consumed_at = CURRENT_TIMESTAMP
@@ -144,6 +172,19 @@ app.post('/api/register-links/:token/register', async (c) => {
   )
     .bind(Number(result.meta.last_row_id), Number(invite.id))
     .run();
+
+  if (!consume.meta?.changes) {
+    await c.env.DB.prepare(
+      `UPDATE users
+       SET username = username || '#revoked-' || id,
+           deleted_at = CURRENT_TIMESTAMP,
+           is_disabled = 1
+       WHERE id = ?`
+    )
+      .bind(Number(result.meta.last_row_id))
+      .run();
+    return errorResponse('注册链接已失效', 400);
+  }
 
   return c.json({ ok: true });
 });
@@ -240,6 +281,11 @@ app.post('/api/auth/change-password', async (c) => {
     return errorResponse('请填写完整密码');
   }
 
+  const passwordValidation = validatePassword(newPassword);
+  if (!passwordValidation.valid) {
+    return errorResponse(passwordValidation.error);
+  }
+
   const user = await c.env.DB.prepare(
     `SELECT password_hash, password_salt
      FROM users
@@ -290,8 +336,10 @@ app.patch('/api/me/profile', async (c) => {
   const payload = await parseJsonRequest(c.req.raw);
   const displayName = String(payload.displayName || session.displayName).trim();
   const avatarKey = payload.avatarKey ? String(payload.avatarKey) : null;
-  if (!displayName) {
-    return errorResponse('显示名称不能为空');
+
+  const displayNameValidation = validateDisplayName(displayName);
+  if (!displayNameValidation.valid) {
+    return errorResponse(displayNameValidation.error);
   }
 
   await c.env.DB.prepare(
@@ -458,6 +506,10 @@ app.get('/api/bootstrap', async (c) => {
       }
     }))
   });
+});
+
+app.get('/api/moderation/blocked-words', async (c) => {
+  return c.json({ words: await getBlockedWords(c.env.DB) });
 });
 
 app.use('/api/admin/*', adminMiddleware);

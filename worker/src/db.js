@@ -188,6 +188,7 @@ export async function listChannelMembers(db, channelId) {
       `SELECT
          cm.user_id,
          cm.role,
+         cm.muted_until,
          cm.joined_at,
          u.username,
          u.display_name,
@@ -207,8 +208,37 @@ export async function listChannelMembers(db, channelId) {
     displayName: row.display_name,
     avatarUrl: row.avatar_key ? publicFileUrl(row.avatar_key) : '',
     role: row.role,
+    mutedUntil: row.muted_until || null,
     joinedAt: row.joined_at
   }));
+}
+
+export async function getChannelMemberModeration(db, channelId, userId) {
+  const { results } = await db
+    .prepare(
+      `SELECT role, muted_until
+       FROM channel_members
+       WHERE channel_id = ?
+         AND user_id = ?
+       LIMIT 1`
+    )
+    .bind(Number(channelId), Number(userId))
+    .all();
+
+  return results[0] || null;
+}
+
+export async function setChannelMemberMute(db, channelId, userId, mutedUntil) {
+  await db
+    .prepare(
+      `UPDATE channel_members
+       SET muted_until = ?
+       WHERE channel_id = ?
+         AND user_id = ?
+         AND role != 'owner'`
+    )
+    .bind(mutedUntil || null, Number(channelId), Number(userId))
+    .run();
 }
 
 export async function listMessages(db, roomId, before = null, limit = 30) {

@@ -1,4 +1,5 @@
-import { insertMessage, requireAccessibleRoom } from '../db.js';
+import { getChannelMemberModeration, insertMessage, requireAccessibleRoom } from '../db.js';
+import { findBlockedWord, getBlockedWords, isMutedUntilActive } from '../moderation.js';
 import { validateSession } from '../session.js';
 import { pickAttachment } from '../utils.js';
 
@@ -273,11 +274,33 @@ export class ChannelRoom {
     }
 
     try {
+      const moderation = await getChannelMemberModeration(
+        this.env.DB,
+        nextMeta.room.id,
+        nextMeta.session.userId
+      );
+      if (isMutedUntilActive(moderation?.muted_until)) {
+        sendSocketError(ws, '你已被禁言，暂时不能在此群组发言');
+        return;
+      }
+
+      const blocked = findBlockedWord(payload.content, await getBlockedWords(this.env.DB));
+      if (blocked) {
+        sendSocketError(ws, '消息包含违禁词，已被拦截');
+        return;
+      }
+
+      const attachment = pickAttachment(payload.attachment);
+      if (attachment && !attachment.key.startsWith(`${nextMeta.session.userId}/`)) {
+        sendSocketError(ws, '附件无效或无权发送');
+        return;
+      }
+
       const saved = await insertMessage(this.env.DB, {
         channelId: nextMeta.room.id,
         senderId: nextMeta.session.userId,
         content: payload.content,
-        attachment: pickAttachment(payload.attachment)
+        attachment
       });
       const packet = JSON.stringify({
         type: 'message',
