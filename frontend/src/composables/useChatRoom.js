@@ -5,9 +5,9 @@ import {
 	encryptMessageContent,
 	isEncryptedMessageContent,
 } from "../e2ee.js";
+import { dispatchAuthInvalid } from "../auth-storage.js";
 import { connectRoomSocket } from "../ws.js";
 
-const AUTH_INVALID_EVENT = "cfchat:auth-invalid";
 const WS_CLOSE_UNAUTHORIZED = 4401;
 const WS_CLOSE_FORBIDDEN = 4403;
 const WS_REASON_UNAUTHORIZED = "session_invalid";
@@ -44,7 +44,10 @@ export function useChatRoom({
 	const groupAvatarInputEl = ref(null);
 	const inviteUserId = ref("");
 	let roomSocket = null;
-	let expectSocketClose = false;
+	let roomSocketKey = "";
+	let socketConnectToken = 0;
+	const intentionallyClosingSockets = new WeakSet();
+	const deferredCloseSockets = new Set();
 
 	const activeRoomStorageKey = computed(() => {
 		const room = activeRoom.value;
@@ -246,13 +249,7 @@ export function useChatRoom({
 	}
 
 	function emitAuthInvalid(message) {
-		if (typeof window !== "undefined") {
-			window.dispatchEvent(
-				new CustomEvent(AUTH_INVALID_EVENT, {
-					detail: { message },
-				}),
-			);
-		}
+		dispatchAuthInvalid(message);
 	}
 
 	function handleRoomAccessRevoked() {
@@ -289,13 +286,40 @@ export function useChatRoom({
 		}
 	}
 
+	function markSocketForClose(socket) {
+		if (!socket) {
+			return;
+		}
+
+		intentionallyClosingSockets.add(socket);
+		try {
+			socket.close();
+		} catch {
+			intentionallyClosingSockets.delete(socket);
+		}
+	}
+
+	function flushDeferredSockets(exceptSocket = null) {
+		for (const socket of deferredCloseSockets) {
+			deferredCloseSockets.delete(socket);
+			if (!socket || socket === exceptSocket) {
+				continue;
+			}
+			if (socket === roomSocket) {
+				roomSocket = null;
+				roomSocketKey = "";
+			}
+			markSocketForClose(socket);
+		}
+	}
+
 	function disconnectSocket() {
+		socketConnectToken += 1;
+		flushDeferredSockets();
 		if (roomSocket) {
-			expectSocketClose = true;
-			roomSocket.close();
+			markSocketForClose(roomSocket);
 			roomSocket = null;
-		} else {
-			expectSocketClose = false;
+			roomSocketKey = "";
 		}
 		wsStatus.value = "closed";
 	}
@@ -305,39 +329,75 @@ export function useChatRoom({
 			return;
 		}
 
-		disconnectSocket();
+		const nextRoomKey = `${activeRoom.value.kind}:${activeRoom.value.id}`;
+		if (
+			roomSocket &&
+			roomSocketKey === nextRoomKey &&
+			roomSocket.readyState !== WebSocket.CLOSING &&
+			roomSocket.readyState !== WebSocket.CLOSED
+		) {
+			return;
+		}
+
+		const previousSocket = roomSocket;
+		if (previousSocket) {
+			deferredCloseSockets.add(previousSocket);
+		}
+
+		const connectToken = socketConnectToken + 1;
+		socketConnectToken = connectToken;
 		wsStatus.value = "connecting";
 		const socket = connectRoomSocket({
 			kind: activeRoom.value.kind,
 			roomId: activeRoom.value.id,
 			onStatus(event) {
-				if (event?.socket && roomSocket && event.socket !== roomSocket) {
+				if (!event?.socket) {
+					return;
+				}
+
+				if (intentionallyClosingSockets.has(event.socket)) {
+					if (event.status === "closed") {
+						intentionallyClosingSockets.delete(event.socket);
+						deferredCloseSockets.delete(event.socket);
+					}
+					return;
+				}
+
+				if (event.socket !== socket || connectToken !== socketConnectToken) {
 					return;
 				}
 
 				const status = event?.status || "closed";
 				if (status === "open") {
-					expectSocketClose = false;
+					roomSocket = socket;
+					roomSocketKey = nextRoomKey;
 					wsStatus.value = "open";
+					flushDeferredSockets(socket);
 					return;
 				}
 
 				if (status === "closed") {
-					if (event?.socket && event.socket === roomSocket) {
+					flushDeferredSockets(socket);
+					if (event.socket === roomSocket) {
 						roomSocket = null;
+						roomSocketKey = "";
 					}
 					wsStatus.value = "closed";
-					if (expectSocketClose) {
-						expectSocketClose = false;
-						return;
-					}
 					handleSocketClose(event);
 					return;
 				}
 
+				if (status === "error") {
+					flushDeferredSockets(socket);
+				}
+
 				wsStatus.value = status;
 			},
-			onMessage(payload) {
+			onMessage(payload, sourceSocket) {
+				if (sourceSocket !== roomSocket || connectToken !== socketConnectToken) {
+					return;
+				}
+
 				if (payload.type === "message" && payload.message) {
 					if (messages.value.some((item) => item.id === payload.message.id)) {
 						return;
@@ -352,11 +412,17 @@ export function useChatRoom({
 				}
 			},
 		});
-		roomSocket = socket;
 	}
 
 	async function sendMessage() {
-		if (!roomSocket || roomSocket.readyState !== WebSocket.OPEN) {
+		const activeRoomKey = activeRoom.value
+			? `${activeRoom.value.kind}:${activeRoom.value.id}`
+			: "";
+		if (
+			!roomSocket ||
+			roomSocket.readyState !== WebSocket.OPEN ||
+			roomSocketKey !== activeRoomKey
+		) {
 			error.value = "Real-time connection is not ready. Please try again in a moment.";
 			return;
 		}

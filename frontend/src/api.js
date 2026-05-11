@@ -1,9 +1,8 @@
+import { dispatchAuthInvalid } from './auth-storage.js';
+
 const API_PREFIX = '/api';
-const AUTH_INVALID_EVENT = 'cfchat:auth-invalid';
 
 function buildHeaders(extra = {}) {
-  // 令牌现在自动在 HttpOnly Cookie 中发送，无需手动处理
-  // 浏览器会自动在所有跨域请求中包含 credentials
   return { ...extra };
 }
 
@@ -33,11 +32,7 @@ async function request(path, options = {}) {
     error.payload = payload;
 
     if (response.status === 401 && typeof window !== 'undefined') {
-      window.dispatchEvent(
-        new CustomEvent(AUTH_INVALID_EVENT, {
-          detail: { message }
-        })
-      );
+      dispatchAuthInvalid(message);
     }
 
     throw error;

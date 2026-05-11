@@ -1,7 +1,7 @@
 import { reactive } from 'vue';
 import api from './api.js';
+import { addAuthInvalidListener, clearStoredToken } from './auth-storage.js';
 
-const AUTH_INVALID_EVENT = 'cfchat:auth-invalid';
 const DEFAULT_SITE_ICON_URL = '/logo.svg';
 
 const state = reactive({
@@ -14,6 +14,7 @@ const state = reactive({
 });
 
 function clearAuthState() {
+  clearStoredToken();
   state.session = null;
 }
 
@@ -89,7 +90,7 @@ function setSite(site) {
 }
 
 if (typeof window !== 'undefined') {
-  window.addEventListener(AUTH_INVALID_EVENT, () => {
+  addAuthInvalidListener(() => {
     clearAuthState();
   });
 }

@@ -4,17 +4,25 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { hashPassword } from "../../worker/src/auth.js";
 
-const username = String(process.env.CFCHAT_ADMIN_USERNAME || "").trim();
-const password = String(process.env.CFCHAT_ADMIN_PASSWORD || "");
-const displayNameInput = String(process.env.CFCHAT_ADMIN_DISPLAY_NAME || "").trim();
+const username = String(
+  process.env.EDGECHAT_ADMIN_USERNAME || process.env.CFCHAT_ADMIN_USERNAME || "",
+).trim();
+const password = String(process.env.EDGECHAT_ADMIN_PASSWORD || process.env.CFCHAT_ADMIN_PASSWORD || "");
+const displayNameInput = String(
+  process.env.EDGECHAT_ADMIN_DISPLAY_NAME || process.env.CFCHAT_ADMIN_DISPLAY_NAME || "",
+).trim();
 const displayName = displayNameInput || username || "Administrator";
 
 if (!username) {
-  throw new Error("Missing required environment variable: CFCHAT_ADMIN_USERNAME");
+  throw new Error(
+    "Missing required environment variable: EDGECHAT_ADMIN_USERNAME (or legacy CFCHAT_ADMIN_USERNAME)",
+  );
 }
 
 if (!password) {
-  throw new Error("Missing required environment variable: CFCHAT_ADMIN_PASSWORD");
+  throw new Error(
+    "Missing required environment variable: EDGECHAT_ADMIN_PASSWORD (or legacy CFCHAT_ADMIN_PASSWORD)",
+  );
 }
 
 function escapeSql(value) {
@@ -58,7 +66,7 @@ SET
 WHERE username = '${safeUsername}';
 `.trim();
 
-  const outputPath = resolve(process.cwd(), ".tmp", "cfchat-admin-upsert.sql");
+  const outputPath = resolve(process.cwd(), ".tmp", "edgechat-admin-upsert.sql");
   mkdirSync(resolve(process.cwd(), ".tmp"), { recursive: true });
   writeFileSync(outputPath, `${sql}\n`, "utf8");
 

@@ -15,13 +15,15 @@ Edgechat 是一个功能完整的即时通讯系统，专为部署在 Cloudflare
 ## 功能特性
 
 - 用户账号系统：仅支持管理员创建用户，不开放自由注册
-- 支持公开频道、私有频道和一对一私信
+- 支持公开频道、私有频道和一对一私信，群主可管理成员
 - 基于 WebSocket 的实时消息同步
 - 支持分页消息历史记录和消息搜索
 - 支持文件上传和头像管理
 - 提供管理员后台，包括用户管理、消息查看和站点设置
+- 管理员可查看任意群组和私信消息
+- 现代化 Liquid Glass 风格界面，已适配移动端并支持基础无障碍能力
 - 完整的管理员操作审计日志
-- XSS 防护和请求限流
+- XSS 防护、请求限流和定时硬删除过期消息
 
 ## 技术栈
 
@@ -32,6 +34,24 @@ Edgechat 是一个功能完整的即时通讯系统，专为部署在 Cloudflare
 - **会话管理：** Cloudflare KV
 - **文件存储：** Cloudflare R2
 - **部署工具：** Wrangler、GitHub Actions
+## 部署
+
+### GitHub Actions 自动部署
+
+推荐优先使用 GitHub Actions 部署，适合长期维护和生产环境更新。
+
+- 快速开始：<https://doc.chsm666.top/guide/getting-started.html>
+- 详细教程：<https://doc.chsm666.top/guide/actions-deploy.html>
+
+仓库内已提供 `.github/workflows/deploy-worker.yml`，推送到 `master` 或 `main`，或手动触发 `workflow_dispatch` 后即可执行自动部署。
+
+### 手动部署
+
+如果你希望本地手动部署，完整步骤、资源准备和注意事项请查看文档站教程：
+
+- 手动部署教程：<https://doc.chsm666.top/guide/getting-started.html>
+- 文档首页：<https://doc.chsm666.top/>
+- Docker 本地部署：[DOCKER.md](DOCKER.md)
 
 ## 快速开始
 
@@ -106,6 +126,39 @@ v2.0.0 版本包含较为完整的安全加固措施：
 - `/admin/users`：用户管理
 - `/admin/messages`：消息查看
 - `/admin/site`：网站设置
+
+## 项目结构
+
+```text
+edgechat/
+├─ frontend/
+│  ├─ src/
+│  │  ├─ api.js
+│  │  ├─ router.js
+│  │  ├─ store.js
+│  │  ├─ ws.js
+│  │  ├─ styles.css
+│  │  ├─ components/ui/
+│  │  └─ pages/
+│  └─ vite.config.js
+├─ worker/
+│  ├─ schema.sql
+│  ├─ migrations/
+│  └─ src/
+│     ├─ index.js
+│     ├─ auth.js
+│     ├─ db.js
+│     ├─ middleware.js
+│     ├─ utils.js
+│     ├─ api/
+│     └─ do/
+├─ wrangler.toml
+├─ package.json
+├─ README.md
+└─ LICENSE
+```
+
+更多实现说明可查看 [TECHNICAL.md](TECHNICAL.md) 和文档站：<https://doc.chsm666.top/>
 
 ## 贡献
 

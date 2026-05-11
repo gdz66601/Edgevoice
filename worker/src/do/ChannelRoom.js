@@ -3,9 +3,16 @@ import { findBlockedWord, getBlockedWords, isMutedUntilActive } from '../moderat
 import { validateSession } from '../session.js';
 import { pickAttachment } from '../utils.js';
 
-function socketMeta(session, room) {
+const INTERNAL_AUTH_HEADER = 'x-cfchat-internal-auth';
+const VERIFIED_USER_ID_HEADER = 'x-cfchat-verified-user-id';
+const VERIFIED_IS_ADMIN_HEADER = 'x-cfchat-verified-is-admin';
+const VERIFIED_AT_HEADER = 'x-cfchat-verified-at';
+const WS_CLOSE_FORBIDDEN = 4403;
+const WS_REASON_FORBIDDEN = 'room_forbidden';
+
+function socketMeta(principal, room) {
   return {
-    session,
+    principal,
     room
   };
 }
@@ -44,24 +51,21 @@ function normalizeWebSocketMessage(message) {
   return '';
 }
 
-async function revalidateConnection(env, meta) {
-  const auth = await validateSession(env, meta.session.token);
-  if (!auth.ok) {
-    return { ok: false, status: auth.status, message: auth.message };
+function parseVerifiedPrincipal(request) {
+  if (request.headers.get(INTERNAL_AUTH_HEADER) !== 'worker-verified') {
+    return null;
   }
 
-  const room = await requireAccessibleRoom(
-    env.DB,
-    auth.session.userId,
-    meta.room.kind,
-    meta.room.id,
-    auth.session.isAdmin
-  );
-  if (!room) {
-    return { ok: false, status: 403, message: '你已无权访问该会话' };
+  const userId = Number(request.headers.get(VERIFIED_USER_ID_HEADER) || '');
+  const verifiedAt = Number(request.headers.get(VERIFIED_AT_HEADER) || '');
+  if (!Number.isFinite(userId) || !Number.isFinite(verifiedAt)) {
+    return null;
   }
 
-  return { ok: true, session: auth.session, room };
+  return {
+    userId,
+    isAdmin: request.headers.get(VERIFIED_IS_ADMIN_HEADER) === '1'
+  };
 }
 
 export class ChannelRoom {
@@ -69,12 +73,10 @@ export class ChannelRoom {
     this.state = state;
     this.env = env;
     this.connections = new Map();
-
-    // 添加速率限制和大小检查配置
-    this.messageRateLimits = new Map(); // userId -> {count, resetAt}
-    this.MESSAGE_SIZE_LIMIT = 10 * 1024; // 10KB
-    this.RATE_LIMIT_PER_SECOND = 10;     // 每秒最多 10 条消息
-    this.RATE_LIMIT_WINDOW = 1000;       // 1 秒
+    this.messageRateLimits = new Map();
+    this.MESSAGE_SIZE_LIMIT = 10 * 1024;
+    this.RATE_LIMIT_PER_SECOND = 10;
+    this.RATE_LIMIT_WINDOW = 1000;
 
     for (const socket of this.state.getWebSockets()) {
       const meta = socket.deserializeAttachment();
@@ -84,12 +86,12 @@ export class ChannelRoom {
     }
   }
 
-  disconnect(ws, message) {
+  disconnect(ws, message, code = WS_CLOSE_FORBIDDEN, reason = WS_REASON_FORBIDDEN) {
     sendSocketError(ws, message);
     try {
-      ws.close(1008, 'Forbidden');
+      ws.close(code, reason);
     } catch {
-      // Ignore.
+      // Ignore broken sockets.
     }
     this.removeConnection(ws);
   }
@@ -98,13 +100,13 @@ export class ChannelRoom {
     const meta = this.connections.get(ws);
     this.connections.delete(ws);
 
-    const userId = meta?.session?.userId;
+    const userId = meta?.principal?.userId;
     if (!userId) {
       return;
     }
 
     const hasOtherConnection = Array.from(this.connections.values()).some(
-      (storedMeta) => storedMeta?.session?.userId === userId
+      (storedMeta) => storedMeta?.principal?.userId === userId
     );
     if (!hasOtherConnection) {
       this.messageRateLimits.delete(userId);
@@ -119,14 +121,21 @@ export class ChannelRoom {
     }
   }
 
-  async ensureAuthorized(ws, meta) {
-    const revalidated = await revalidateConnection(this.env, meta);
-    if (!revalidated.ok) {
-      this.disconnect(ws, revalidated.message);
+  async ensureAccessible(ws, meta) {
+    const room = await requireAccessibleRoom(
+      this.env.DB,
+      meta.principal.userId,
+      meta.room.kind,
+      meta.room.id,
+      meta.principal.isAdmin
+    );
+
+    if (!room) {
+      this.disconnect(ws, '你已无权访问该会话');
       return null;
     }
 
-    const nextMeta = socketMeta(revalidated.session, revalidated.room);
+    const nextMeta = socketMeta(meta.principal, room);
     ws.serializeAttachment(nextMeta);
     this.connections.set(ws, nextMeta);
     return nextMeta;
@@ -136,40 +145,27 @@ export class ChannelRoom {
     try {
       return JSON.parse(message);
     } catch {
-      sendSocketError(ws, '无效消息格式');
+      sendSocketError(ws, 'Invalid message payload');
       return null;
     }
   }
 
-  // 修复：创建连接快照以避免迭代中修改集合导致的竞态条件
   async broadcast(packet) {
-    // 创建当前连接的快照，避免在循环中修改 Map 时出现迭代问题
     const connectionSnapshot = Array.from(this.connections.entries());
-
-    // 并发处理所有连接，使用 Promise.allSettled 避免单个失败影响其他连接
-    const results = await Promise.allSettled(
+    await Promise.allSettled(
       connectionSnapshot.map(async ([socket, storedMeta]) => {
-        try {
-          const authorized = await this.ensureAuthorized(socket, storedMeta);
-          if (!authorized) {
-            return; // 未授权，跳过此连接
-          }
+        const authorized = await this.ensureAccessible(socket, storedMeta);
+        if (!authorized) {
+          return;
+        }
 
-          try {
-            socket.send(packet);
-          } catch (error) {
-            // 发送失败，删除此连接
-            this.removeConnection(socket);
-            throw error;
-          }
-        } catch (error) {
-          console.error('Broadcast error:', error);
-          // 继续处理其他连接，不中断
+        try {
+          socket.send(packet);
+        } catch {
+          this.removeConnection(socket);
         }
       })
     );
-
-    return results; // 返回结果用于监控/日志
   }
 
   async fetch(request) {
@@ -182,18 +178,26 @@ export class ChannelRoom {
     const token = url.searchParams.get('token') || '';
     const kind = url.searchParams.get('kind') || '';
     const roomId = Number(url.searchParams.get('id') || '');
-    const auth = await validateSession(this.env, token);
-    if (!auth.ok) {
-      return new Response('Unauthorized', { status: 401 });
+
+    let principal = parseVerifiedPrincipal(request);
+    if (!principal) {
+      const auth = await validateSession(this.env, token);
+      if (!auth.ok) {
+        return new Response('Unauthorized', { status: 401 });
+      }
+
+      principal = {
+        userId: auth.session.userId,
+        isAdmin: auth.session.isAdmin
+      };
     }
-    const session = auth.session;
 
     const room = await requireAccessibleRoom(
       this.env.DB,
-      session.userId,
+      principal.userId,
       kind,
       roomId,
-      session.isAdmin
+      principal.isAdmin
     );
 
     if (!room) {
@@ -203,7 +207,7 @@ export class ChannelRoom {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     this.state.acceptWebSocket(server);
-    const meta = socketMeta(session, room);
+    const meta = socketMeta(principal, room);
     server.serializeAttachment(meta);
     this.connections.set(server, meta);
     server.send(
@@ -226,27 +230,24 @@ export class ChannelRoom {
       return;
     }
 
-    // 检查消息大小限制
     if (getMessageByteLength(message) > this.MESSAGE_SIZE_LIMIT) {
       sendSocketError(ws, `消息过大，最大 ${Math.round(this.MESSAGE_SIZE_LIMIT / 1024)}KB`);
       return;
     }
 
-    const nextMeta = await this.ensureAuthorized(ws, meta);
+    const nextMeta = await this.ensureAccessible(ws, meta);
     if (!nextMeta) {
       return;
     }
 
-    // 检查速率限制
     const now = Date.now();
     this.cleanupExpiredRateLimits(now);
-    const userId = nextMeta.session.userId;
+    const userId = nextMeta.principal.userId;
     let counter = this.messageRateLimits.get(userId) || {
       count: 0,
       resetAt: now + this.RATE_LIMIT_WINDOW
     };
 
-    // 重置时间窗口
     if (now > counter.resetAt) {
       counter = {
         count: 0,
@@ -254,13 +255,12 @@ export class ChannelRoom {
       };
     }
 
-    // 检查是否超过速率限制
     if (counter.count >= this.RATE_LIMIT_PER_SECOND) {
       sendSocketError(ws, '消息发送过于频繁，请稍后再试');
       return;
     }
 
-    counter.count++;
+    counter.count += 1;
     this.messageRateLimits.set(userId, counter);
 
     const payload = this.parsePayload(ws, normalizeWebSocketMessage(message));
@@ -269,7 +269,7 @@ export class ChannelRoom {
     }
 
     if (payload.type !== 'send') {
-      sendSocketError(ws, '不支持的消息类型');
+      sendSocketError(ws, 'Unsupported message type');
       return;
     }
 
@@ -277,7 +277,7 @@ export class ChannelRoom {
       const moderation = await getChannelMemberModeration(
         this.env.DB,
         nextMeta.room.id,
-        nextMeta.session.userId
+        nextMeta.principal.userId
       );
       if (isMutedUntilActive(moderation?.muted_until)) {
         sendSocketError(ws, '你已被禁言，暂时不能在此群组发言');
@@ -291,14 +291,14 @@ export class ChannelRoom {
       }
 
       const attachment = pickAttachment(payload.attachment);
-      if (attachment && !attachment.key.startsWith(`${nextMeta.session.userId}/`)) {
+      if (attachment && !attachment.key.startsWith(`${nextMeta.principal.userId}/`)) {
         sendSocketError(ws, '附件无效或无权发送');
         return;
       }
 
       const saved = await insertMessage(this.env.DB, {
         channelId: nextMeta.room.id,
-        senderId: nextMeta.session.userId,
+        senderId: nextMeta.principal.userId,
         content: payload.content,
         attachment
       });
@@ -309,7 +309,7 @@ export class ChannelRoom {
 
       await this.broadcast(packet);
     } catch (error) {
-      ws.send(JSON.stringify({ type: 'error', error: error.message || '发送失败' }));
+      sendSocketError(ws, error.message || 'Send failed');
     }
   }
 

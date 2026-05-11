@@ -1,3 +1,4 @@
+# Legacy Worker service name kept to avoid creating a new production Worker during rename cleanup.
 name = "cfchat"
 main = "worker/src/index.js"
 compatibility_date = "2026-04-05"
@@ -15,6 +16,7 @@ MAX_FILE_SIZE = "20971520"
 
 [[d1_databases]]
 binding = "DB"
+# Legacy D1 resource name kept intentionally; do not rename without a data migration plan.
 database_name = "cfchat-db"
 database_id = "YOUR_D1_DATABASE_ID_HERE"
 
@@ -24,6 +26,7 @@ id = "YOUR_KV_NAMESPACE_ID_HERE"
 
 [[r2_buckets]]
 binding = "FILES"
+# Legacy R2 bucket name kept intentionally; code/docs use Edgechat branding.
 bucket_name = "cfchat-files"
 
 [[durable_objects.bindings]]

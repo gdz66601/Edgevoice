@@ -1,5 +1,5 @@
 {
-	"name": "cfchat",
+	"name": "edgechat",
 	"version": "1.0.0",
 	"private": true,
 	"type": "module",
@@ -23,7 +23,7 @@
 	"devDependencies": {
 		"@biomejs/biome": "2.4.11",
 		"@vitejs/plugin-vue": "^5.2.3",
-		"vite": "^6.3.5",
+		"vite": "^6.4.2",
 		"wrangler": "^4.11.1"
 	}
 }

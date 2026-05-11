@@ -24,9 +24,9 @@ export function connectRoomSocket({ kind, roomId, onMessage, onStatus }) {
   socket.addEventListener('message', (event) => {
     try {
       const payload = JSON.parse(event.data);
-      onMessage?.(payload);
+      onMessage?.(payload, socket);
     } catch {
-      onMessage?.({ type: 'system', message: event.data });
+      onMessage?.({ type: 'system', message: event.data }, socket);
     }
   });
 

@@ -19,9 +19,9 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      CFCHAT_ADMIN_USERNAME: ${{ secrets.CFCHAT_ADMIN_USERNAME }}
-      CFCHAT_ADMIN_PASSWORD: ${{ secrets.CFCHAT_ADMIN_PASSWORD }}
-      CFCHAT_ADMIN_DISPLAY_NAME: ${{ secrets.CFCHAT_ADMIN_DISPLAY_NAME }}
+      EDGECHAT_ADMIN_USERNAME: ${{ secrets.EDGECHAT_ADMIN_USERNAME || secrets.CFCHAT_ADMIN_USERNAME }}
+      EDGECHAT_ADMIN_PASSWORD: ${{ secrets.EDGECHAT_ADMIN_PASSWORD || secrets.CFCHAT_ADMIN_PASSWORD }}
+      EDGECHAT_ADMIN_DISPLAY_NAME: ${{ secrets.EDGECHAT_ADMIN_DISPLAY_NAME || secrets.CFCHAT_ADMIN_DISPLAY_NAME }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -54,12 +54,12 @@ jobs:
         run: npx wrangler d1 execute ${{ steps.ensure_resources.outputs.d1_database_name }} --remote --file worker/schema.sql --config wrangler.ci.toml
 
       - name: Generate admin bootstrap SQL (optional)
-        if: env.CFCHAT_ADMIN_USERNAME != '' && env.CFCHAT_ADMIN_PASSWORD != ''
+        if: env.EDGECHAT_ADMIN_USERNAME != '' && env.EDGECHAT_ADMIN_PASSWORD != ''
         run: node .github/scripts/generate-admin-bootstrap-sql.mjs
 
       - name: Ensure admin user (optional)
-        if: env.CFCHAT_ADMIN_USERNAME != '' && env.CFCHAT_ADMIN_PASSWORD != ''
-        run: npx wrangler d1 execute ${{ steps.ensure_resources.outputs.d1_database_name }} --remote --file .tmp/cfchat-admin-upsert.sql --config wrangler.ci.toml
+        if: env.EDGECHAT_ADMIN_USERNAME != '' && env.EDGECHAT_ADMIN_PASSWORD != ''
+        run: npx wrangler d1 execute ${{ steps.ensure_resources.outputs.d1_database_name }} --remote --file .tmp/edgechat-admin-upsert.sql --config wrangler.ci.toml
 
       - name: Deploy worker
         run: npx wrangler deploy --config wrangler.ci.toml
