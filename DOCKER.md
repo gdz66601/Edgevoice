@@ -8,9 +8,17 @@
 
 这个脚本会自动：
 - ✅ 构建并启动 Docker 容器
-- ✅ 初始化数据库表
-- ✅ 创建管理员账户
+- ✅ 初始化数据库 schema 与所有迁移
+- ✅ 通过 `scripts/bootstrap-local-admin.mjs` 生成正确的 PBKDF2 哈希并 upsert 管理员账户
 - ✅ 显示访问信息
+
+> 自定义初始管理员凭据：
+> ```bash
+> EDGECHAT_ADMIN_USERNAME=alice \
+> EDGECHAT_ADMIN_PASSWORD='Replace-This-Strong-Password' \
+> EDGECHAT_ADMIN_DISPLAY_NAME='Alice' \
+> ./docker-start.sh
+> ```
 
 ## 📱 访问应用
 
@@ -18,10 +26,12 @@
 
 ## 🔐 默认管理员账户
 
+如果未通过环境变量覆盖：
 - **用户名**：`admin`
-- **密码**：`admin`
+- **密码**：`admin123`
 
-⚠️ 首次登录后请修改密码！
+> ⚠️ 这是仅用于首次本地体验的临时弱密码。**首次登录后必须立即修改密码。**
+> 切勿将此默认凭据用于任何对外可访问的环境。
 
 ## 🛠️ 手动部署
 
@@ -39,11 +49,28 @@ docker compose exec edgechat wrangler d1 execute cfchat-db --local --file=./work
 
 `cfchat-db` is the retained legacy D1 database name. Keep using it unless you are doing a planned data migration.
 
-### 3. 创建管理员账户
+### 3. 应用迁移
 
 ```bash
-docker compose exec edgechat wrangler d1 execute cfchat-db --local --command="INSERT INTO users (username, password_hash, password_salt, display_name, is_admin) VALUES ('admin', '\$2a\$10\$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'salt', 'Administrator', 1);"
+for f in worker/migrations/*.sql; do
+  docker compose exec -T edgechat wrangler d1 execute cfchat-db --local --file="./$f"
+done
 ```
+
+### 4. 创建管理员账户
+
+```bash
+# 在宿主机生成包含正确 PBKDF2 哈希的 upsert SQL
+EDGECHAT_ADMIN_PASSWORD='Strong-Password-Here' node scripts/bootstrap-local-admin.mjs
+
+# 在容器中执行该 SQL
+docker compose exec -T edgechat wrangler d1 execute cfchat-db --local \
+  --file=./.tmp/edgechat-local-admin-upsert.sql
+```
+
+> ❗ 不要尝试自己手写 `INSERT INTO users (... password_hash, password_salt ...)`：
+> 项目使用 PBKDF2-SHA256 派生密码哈希（参见 `worker/src/auth.js`），任何其他算法（bcrypt 等）
+> 生成的哈希都将无法登录。
 
 ## 📊 常用命令
 
@@ -70,7 +97,13 @@ docker compose down -v
 
 **原因**：数据库未初始化
 
-**解决**：运行 `./docker-start.sh` 或手动执行步骤 2 和 3
+**解决**：运行 `./docker-start.sh` 或手动执行步骤 2-4
+
+### 问题：能输入用户名密码但提示账号不存在或密码错误
+
+**原因**：跳过了 `scripts/bootstrap-local-admin.mjs`，直接用了错误算法的哈希
+
+**解决**：清空 users 表后按【手动部署】步骤 4 重新执行 bootstrap 脚本
 
 ### 问题：端口被占用
 
@@ -100,6 +133,9 @@ Docker 仅用于本地开发和测试。
 # 然后部署
 npm run deploy
 ```
+
+> 生产部署时，**不要**让 CI 在每次发布时执行 admin upsert。请在首次部署后通过 `scripts/bootstrap-local-admin.mjs`
+> 一次性创建初始管理员，后续账户管理在应用内完成。
 
 ## 📝 注意事项
 

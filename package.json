@@ -5,14 +5,22 @@
 	"type": "module",
 	"scripts": {
 		"dev:frontend": "vite --config frontend/vite.config.js",
+		"dev:local": "npm run build && wrangler dev --config wrangler.example.toml --local --ip 127.0.0.1 --port 8787",
+		"dev:local:fresh": "npm run d1:apply && npm run d1:seed:local-admin && npm run dev:local",
 		"build:frontend": "vite build --config frontend/vite.config.js",
 		"build": "npm run build:frontend",
 		"biome:write": "biome check --write .",
 		"biome:check": "biome check .",
 		"biome:ci": "biome ci .",
-		"check": "npm run biome:ci && npm run build",
-		"deploy": "npm run build && wrangler deploy",
-		"d1:apply": "wrangler d1 execute cfchat-db --file ./worker/schema.sql"
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"test:coverage": "vitest run --coverage",
+		"check": "npm run biome:ci && npm run test && npm run build",
+		"deploy": "npm run build && wrangler deploy --config wrangler.toml",
+		"deploy:dry-run": "npm run build && wrangler deploy --config wrangler.example.toml --dry-run",
+		"d1:apply": "wrangler d1 execute DB --config wrangler.example.toml --local --file ./worker/schema.sql",
+		"d1:seed:local-admin": "node scripts/bootstrap-local-admin.mjs && wrangler d1 execute DB --config wrangler.example.toml --local --file ./.tmp/edgechat-local-admin-upsert.sql",
+		"d1:apply:remote": "wrangler d1 execute DB --config wrangler.toml --remote --file ./worker/schema.sql"
 	},
 	"dependencies": {
 		"hono": "^4.8.3",
@@ -22,7 +30,9 @@
 	"devDependencies": {
 		"@biomejs/biome": "2.4.11",
 		"@vitejs/plugin-vue": "^5.2.3",
+		"@vitest/coverage-v8": "^4.1.6",
 		"vite": "^6.4.2",
+		"vitest": "^4.1.6",
 		"wrangler": "^4.11.1"
 	}
 }

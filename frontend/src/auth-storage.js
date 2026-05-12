@@ -1,5 +1,11 @@
-export const PRIMARY_AUTH_KEY = 'edgechat.token';
-export const LEGACY_AUTH_KEY = 'cfchat.token';
+// 历史 localStorage token 已被 HttpOnly Cookie 取代。该模块只剩下：
+// - 清理迁移期遗留的 localStorage token，避免 XSS 读到孤儿数据
+// - 跨组件广播认证失效事件（401 响应触发 store/router 退出登录）
+//
+// 不再维护任何 token 读写函数；从浏览器/扩展程序窃取 cookie 比读
+// localStorage 难得多，移除 token 读写显著减少 XSS 暴露面。
+
+const LEGACY_TOKEN_KEYS = ['edgechat.token', 'cfchat.token'];
 export const AUTH_INVALID_EVENT = 'edgechat:auth-invalid';
 export const LEGACY_AUTH_INVALID_EVENT = 'cfchat:auth-invalid';
 
@@ -9,48 +15,18 @@ function canUseLocalStorage() {
   return typeof localStorage !== 'undefined';
 }
 
-export function getStoredToken() {
-  if (!canUseLocalStorage()) {
-    return '';
-  }
-
-  const primaryToken = localStorage.getItem(PRIMARY_AUTH_KEY) || '';
-  if (primaryToken) {
-    return primaryToken;
-  }
-
-  const legacyToken = localStorage.getItem(LEGACY_AUTH_KEY) || '';
-  if (!legacyToken) {
-    return '';
-  }
-
-  localStorage.setItem(PRIMARY_AUTH_KEY, legacyToken);
-  localStorage.removeItem(LEGACY_AUTH_KEY);
-  return legacyToken;
-}
-
-export function setStoredToken(token) {
+/** 清除遗留的 localStorage token；幂等。 */
+export function purgeLegacyAuthStorage() {
   if (!canUseLocalStorage()) {
     return;
   }
-
-  const cleanToken = String(token || '').trim();
-  if (!cleanToken) {
-    clearStoredToken();
-    return;
+  for (const key of LEGACY_TOKEN_KEYS) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // localStorage 可能被禁用 / quota 异常，忽略即可
+    }
   }
-
-  localStorage.setItem(PRIMARY_AUTH_KEY, cleanToken);
-  localStorage.removeItem(LEGACY_AUTH_KEY);
-}
-
-export function clearStoredToken() {
-  if (!canUseLocalStorage()) {
-    return;
-  }
-
-  localStorage.removeItem(PRIMARY_AUTH_KEY);
-  localStorage.removeItem(LEGACY_AUTH_KEY);
 }
 
 export function dispatchAuthInvalid(message) {

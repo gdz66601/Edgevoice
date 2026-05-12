@@ -1,5 +1,6 @@
 import { ensureDmChannel } from '../db.js';
 import { errorResponse, parseJsonRequest } from '../utils.js';
+import { enforceRateLimit } from '../rate-limit.js';
 
 export function registerDmRoutes(app) {
   app.get('/api/dm', async (c) => {
@@ -53,6 +54,13 @@ export function registerDmRoutes(app) {
     if (!Number.isFinite(targetUserId) || targetUserId === session.userId) {
       return errorResponse('请选择有效用户');
     }
+
+    // 限流：单用户每分钟最多 20 次 DM open（含已存在的复用），阻止批量制造私聊通道。
+    const limited = await enforceRateLimit(c, 'dm-open', String(session.userId), {
+      max: 20,
+      windowSeconds: 60
+    });
+    if (limited) return limited;
 
     const targetUser = await c.env.DB.prepare(
       `SELECT id, username, display_name, avatar_key

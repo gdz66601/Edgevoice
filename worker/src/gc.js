@@ -432,6 +432,11 @@ async function clearUserReferences(env, userIds) {
       `UPDATE channel_members
        SET invited_by = NULL
        WHERE invited_by IN (${placeholders(userIds.length)})`
+    ).bind(...binds),
+    env.DB.prepare(
+      `UPDATE admin_audit_log
+       SET admin_user_id = NULL
+       WHERE admin_user_id IN (${placeholders(userIds.length)})`
     ).bind(...binds)
   ]);
 }

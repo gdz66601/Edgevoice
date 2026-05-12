@@ -1,7 +1,10 @@
-import { hashPassword } from '../auth.js';
-import { getSiteSettings, listMessages, requireAccessibleRoom, updateSiteSettings } from '../db.js';
+import { hashPassword, isAdminUser } from '../auth.js';
+import { getSiteSettings, listMessages, requireAccessibleRoom, updateSiteSettings, getUserById } from '../db.js';
 import { ApiError } from '../errors.js';
 import { errorResponse, parseJsonRequest, randomToken, sanitizeLimit } from '../utils.js';
+import { logAdminAction } from '../audit.js';
+import { isValidUrl, validateDisplayName, validatePassword, validateUsername } from '../validation.js';
+import { getBlockedWords, updateBlockedWords } from '../moderation.js';
 
 export function registerAdminRoutes(app) {
   app.get('/api/admin/overview', async (c) => {
@@ -108,7 +111,38 @@ export function registerAdminRoutes(app) {
     return c.json({ site });
   });
 
+  app.get('/api/admin/blocked-words', async (c) => {
+    const words = await getBlockedWords(c.env.DB);
+    return c.json({ words });
+  });
+
+  app.patch('/api/admin/blocked-words', async (c) => {
+    const session = c.get('session');
+    const payload = await parseJsonRequest(c.req.raw);
+
+    let words;
+    try {
+      words = await updateBlockedWords(c.env.DB, payload.words || []);
+    } catch (error) {
+      return errorResponse(error.message);
+    }
+
+    await logAdminAction(
+      c.env.DB,
+      session.userId,
+      'update_blocked_words',
+      'site',
+      null,
+      { count: words.length },
+      c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for'),
+      c.req.header('user-agent')
+    );
+
+    return c.json({ words });
+  });
+
   app.patch('/api/admin/site-settings', async (c) => {
+    const session = c.get('session');
     const payload = await parseJsonRequest(c.req.raw);
     const siteName = String(payload.siteName || '').trim();
     const siteIconUrl = String(payload.siteIconUrl || '').trim();
@@ -117,7 +151,27 @@ export function registerAdminRoutes(app) {
       return errorResponse('站点名称不能为空');
     }
 
+    if (siteName.length > 64) {
+      return errorResponse('站点名称过长（最多 64 个字符）');
+    }
+
+    if (siteIconUrl && !isValidUrl(siteIconUrl)) {
+      return errorResponse('站点图标地址必须是有效的 http(s) URL');
+    }
+
     const site = await updateSiteSettings(c.env.DB, { siteName, siteIconUrl });
+
+    await logAdminAction(
+      c.env.DB,
+      session.userId,
+      'update_site_settings',
+      'site',
+      null,
+      { siteName, siteIconUrl: siteIconUrl || null },
+      c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for'),
+      c.req.header('user-agent')
+    );
+
     return c.json({ site });
   });
 
@@ -235,16 +289,32 @@ export function registerAdminRoutes(app) {
       return errorResponse('用户名和密码不能为空');
     }
 
+    const usernameValidation = validateUsername(username);
+    if (!usernameValidation.valid) {
+      return errorResponse(usernameValidation.error);
+    }
+
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      return errorResponse(passwordValidation.error);
+    }
+
+    const displayNameValidation = validateDisplayName(displayName);
+    if (!displayNameValidation.valid) {
+      return errorResponse(displayNameValidation.error);
+    }
+
     const hashed = await hashPassword(password);
     const result = await c.env.DB.prepare(
       `INSERT INTO users (
          username,
          display_name,
          password_hash,
-         password_salt
-       ) VALUES (?, ?, ?, ?)`
+         password_salt,
+         password_hash_version
+       ) VALUES (?, ?, ?, ?, ?)`
     )
-      .bind(username, displayName, hashed.hash, hashed.salt)
+      .bind(username, displayName, hashed.hash, hashed.salt, hashed.version)
       .run()
       .catch((error) => {
         if (String(error.message).includes('UNIQUE')) {
@@ -264,10 +334,47 @@ export function registerAdminRoutes(app) {
   });
 
   app.patch('/api/admin/users/:userId', async (c) => {
+    const session = c.get('session');
     const userId = Number(c.req.param('userId'));
+    if (!Number.isFinite(userId)) {
+      return errorResponse('用户不存在', 404);
+    }
+
     const payload = await parseJsonRequest(c.req.raw);
     const isDisabled = payload.isDisabled ? 1 : 0;
     const bumpVersion = isDisabled ? 1 : 0;
+    const targetUser = await getUserById(c.env.DB, userId);
+    if (!targetUser || targetUser.deleted_at) {
+      return errorResponse('用户不存在', 404);
+    }
+
+    if (isDisabled && userId === session.userId) {
+      return errorResponse('无法禁用自己的账号');
+    }
+
+    const isSuperAdmin = String(c.env.ADMIN_USERNAMES || '').toLowerCase()
+      .split(',')
+      .map((username) => username.trim())
+      .filter(Boolean)
+      .includes(session.username.toLowerCase());
+    const targetIsAdmin = isAdminUser(c.env, targetUser);
+    if (targetIsAdmin && !isSuperAdmin) {
+      return errorResponse('无权修改管理员账号', 403);
+    }
+
+    if (isDisabled && targetIsAdmin) {
+      const { results: activeUsers } = await c.env.DB.prepare(
+        `SELECT username, is_admin
+         FROM users
+         WHERE deleted_at IS NULL
+           AND is_disabled = 0`
+      ).all();
+      const activeAdminCount = activeUsers.filter((user) => isAdminUser(c.env, user)).length;
+      if (activeAdminCount <= 1) {
+        return errorResponse('至少需要保留一个可用管理员账号');
+      }
+    }
+
     await c.env.DB.prepare(
       `UPDATE users
        SET is_disabled = ?,
@@ -284,41 +391,131 @@ export function registerAdminRoutes(app) {
   });
 
   app.post('/api/admin/users/:userId/reset-password', async (c) => {
+    const session = c.get('session');
     const userId = Number(c.req.param('userId'));
     const payload = await parseJsonRequest(c.req.raw);
     const password = String(payload.password || '');
+
+    // 验证新密码
     if (!password) {
       return errorResponse('新密码不能为空');
+    }
+
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      return errorResponse(passwordValidation.error);
+    }
+
+    // 防止自我锁定
+    if (userId === session.userId) {
+      return errorResponse('无法重置自己的密码，请使用修改密码功能');
+    }
+
+    // 获取目标用户信息
+    const targetUser = await getUserById(c.env.DB, userId);
+    if (!targetUser) {
+      return errorResponse('用户不存在', 404);
+    }
+
+    // 防止降级权限（非超级管理员不能重置管理员密码）
+    if (Number(targetUser.is_admin)) {
+      // 只有超级管理员（由环境变量定义）才能重置管理员密码
+      const isSuperAdmin = String(c.env.ADMIN_USERNAMES || '').toLowerCase()
+        .split(',')
+        .map(u => u.trim())
+        .filter(Boolean)
+        .includes(session.username.toLowerCase());
+
+      if (!isSuperAdmin) {
+        return errorResponse('无权重置管理员密码', 403);
+      }
     }
 
     const hashed = await hashPassword(password);
     await c.env.DB.prepare(
       `UPDATE users
        SET password_hash = ?,
-            password_salt = ?,
-            session_version = session_version + 1,
-            updated_at = CURRENT_TIMESTAMP
+           password_salt = ?,
+           password_hash_version = ?,
+           session_version = session_version + 1,
+           updated_at = CURRENT_TIMESTAMP
        WHERE id = ?
          AND deleted_at IS NULL`
     )
-      .bind(hashed.hash, hashed.salt, userId)
+      .bind(hashed.hash, hashed.salt, hashed.version, userId)
       .run();
+
+    // 记录审计日志
+    await logAdminAction(
+      c.env.DB,
+      session.userId,
+      'reset_password',
+      'user',
+      userId,
+      {
+        targetUsername: targetUser.username,
+        reason: payload.reason || ''
+      },
+      c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for'),
+      c.req.header('user-agent')
+    );
 
     return c.json({ ok: true });
   });
 
   app.delete('/api/admin/users/:userId', async (c) => {
+    const session = c.get('session');
     const userId = Number(c.req.param('userId'));
+
+    // 防止删除自己
+    if (userId === session.userId) {
+      return errorResponse('无法删除自己的账号');
+    }
+
+    // 获取目标用户信息
+    const targetUser = await getUserById(c.env.DB, userId);
+    if (!targetUser) {
+      return errorResponse('用户不存在', 404);
+    }
+
+    // 防止删除超级管理员
+    if (Number(targetUser.is_admin)) {
+      const isSuperAdmin = String(c.env.ADMIN_USERNAMES || '').toLowerCase()
+        .split(',')
+        .map(u => u.trim())
+        .filter(Boolean)
+        .includes(session.username.toLowerCase());
+
+      if (!isSuperAdmin) {
+        return errorResponse('无权删除管理员账号', 403);
+      }
+    }
+
     await c.env.DB.prepare(
       `UPDATE users
        SET deleted_at = CURRENT_TIMESTAMP,
-            is_disabled = 1,
-            session_version = session_version + 1,
-            updated_at = CURRENT_TIMESTAMP
+           is_disabled = 1,
+           session_version = session_version + 1,
+           updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`
     )
       .bind(userId)
       .run();
+
+    // 记录审计日志
+    await logAdminAction(
+      c.env.DB,
+      session.userId,
+      'delete_user',
+      'user',
+      userId,
+      {
+        targetUsername: targetUser.username,
+        targetDisplayName: targetUser.display_name
+      },
+      c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for'),
+      c.req.header('user-agent')
+    );
 
     return c.json({ ok: true });
   });

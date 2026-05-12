@@ -1,0 +1,2 @@
+# Ignore large generated/minified CSS that triggers non-actionable warnings
+frontend/src/styles.css

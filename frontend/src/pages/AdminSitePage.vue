@@ -10,6 +10,7 @@ const router = useRouter();
 const loading = ref(false);
 const error = ref('');
 const savingSite = ref(false);
+const savingBlockedWords = ref(false);
 const iconUploading = ref(false);
 const inviteSubmitting = ref(false);
 const users = ref([]);
@@ -23,6 +24,9 @@ const siteForm = reactive({
   siteName: 'Edgechat',
   siteIconUrl: '',
   allowPublicRegister: false
+});
+const blockedWordsForm = reactive({
+  text: ''
 });
 const inviteForm = reactive({
   note: ''
@@ -48,10 +52,29 @@ async function loadOverview() {
     siteForm.allowPublicRegister = payload.site?.allowPublicRegister || false;
     const invitePayload = await api.listAdminRegisterLinks();
     invites.value = invitePayload.invites || [];
+    const blockedWordsPayload = await api.getAdminBlockedWords();
+    blockedWordsForm.text = (blockedWordsPayload.words || []).join('\n');
   } catch (currentError) {
     error.value = currentError.message;
   } finally {
     loading.value = false;
+  }
+}
+
+async function saveBlockedWords() {
+  savingBlockedWords.value = true;
+  error.value = '';
+  try {
+    const words = blockedWordsForm.text
+      .split(/\r?\n/)
+      .map((word) => word.trim())
+      .filter(Boolean);
+    const payload = await api.updateAdminBlockedWords(words);
+    blockedWordsForm.text = (payload.words || []).join('\n');
+  } catch (currentError) {
+    error.value = currentError.message;
+  } finally {
+    savingBlockedWords.value = false;
   }
 }
 
@@ -271,6 +294,24 @@ onMounted(loadOverview);
               </div>
             </UiSurface>
           </div>
+        </UiSurface>
+
+        <UiSurface class="panel">
+          <h3 class="panel-title">违禁词黑名单</h3>
+          <label class="field">
+            <span>每行一个词</span>
+            <textarea
+              v-model="blockedWordsForm.text"
+              placeholder="例如：spam"
+              spellcheck="false"
+            />
+          </label>
+          <p class="muted">
+            明文消息由服务端拦截；加密消息会在本机加密前检查，但服务端无法解密审查。
+          </p>
+          <UiButton :disabled="savingBlockedWords" @click="saveBlockedWords">
+            {{ savingBlockedWords ? '保存中...' : '保存黑名单' }}
+          </UiButton>
         </UiSurface>
 
         <UiSurface class="panel">

@@ -6,6 +6,7 @@ import {
   getSession,
   hashPassword,
   putSession,
+  rehashPasswordOnLogin,
   verifyPassword
 } from './auth.js';
 import { getSiteSettings, getUserByUsername } from './db.js';
@@ -17,9 +18,11 @@ import { registerDmRoutes } from './api/dm.js';
 import { registerMessageRoutes } from './api/messages.js';
 import { registerUploadRoutes } from './api/upload.js';
 import { ChannelRoom } from './do/ChannelRoom.js';
-import { Scheduler } from './do/Scheduler.js';
 import { runScheduledGc } from './gc.js';
 import { errorResponse, parseJsonRequest, publicFileUrl } from './utils.js';
+import { validateDisplayName, validatePassword, validateUsername } from './validation.js';
+import { getBlockedWords } from './moderation.js';
+import { clientIp, enforceRateLimit } from './rate-limit.js';
 
 const app = new Hono();
 const INTERNAL_AUTH_HEADER = 'x-cfchat-internal-auth';
@@ -27,10 +30,71 @@ const VERIFIED_USER_ID_HEADER = 'x-cfchat-verified-user-id';
 const VERIFIED_IS_ADMIN_HEADER = 'x-cfchat-verified-is-admin';
 const VERIFIED_AT_HEADER = 'x-cfchat-verified-at';
 
+// SPA shell 的 CSP：允许内联样式（Vue runtime 需要），但禁止内联脚本与外部 JS。
+// 对 /files/* 的强约束 CSP 由 upload.js 单独设置（sandbox + default-src none）。
+const SPA_CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self' ws: wss:",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'"
+].join('; ');
+
+app.use('*', async (c, next) => {
+  await next();
+  const url = new URL(c.req.url);
+  const isApi = url.pathname.startsWith('/api/');
+  const isFile = url.pathname.startsWith('/files/');
+
+  c.header('x-content-type-options', 'nosniff');
+  c.header('referrer-policy', 'no-referrer');
+  c.header('x-frame-options', 'DENY');
+  c.header('permissions-policy', 'camera=(), microphone=(), geolocation=()');
+
+  // 仅在 https 访问时启用 HSTS，避免本地 http 开发环境意外被卡死。
+  if (url.protocol === 'https:') {
+    c.header('strict-transport-security', 'max-age=31536000; includeSubDomains');
+  }
+
+  if (isApi) {
+    c.header('cache-control', 'no-store');
+  } else if (!isFile) {
+    // SPA shell / 静态资源使用全局 CSP；/files/* 由各自 handler 单独控制。
+    if (!c.res.headers.has('content-security-policy')) {
+      c.header('content-security-policy', SPA_CSP);
+    }
+  }
+});
+
+// CORS 配置：限制到特定的来源列表
+function getAllowedOrigins(env) {
+  const originsStr = env.ALLOWED_ORIGINS || '';
+  if (!originsStr) return [];
+  return originsStr.split(',').map(origin => origin.trim()).filter(Boolean);
+}
+
+function resolveCorsOrigin(origin, c) {
+  if (!origin) return '';
+
+  const requestOrigin = new URL(c.req.url).origin;
+  if (origin === requestOrigin) {
+    return origin;
+  }
+
+  const allowedOrigins = getAllowedOrigins(c.env);
+  return allowedOrigins.includes(origin) ? origin : '';
+}
+
 app.use('/api/*', cors({
-  origin: '*',
-  allowHeaders: ['Content-Type', 'Authorization'],
-  allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']
+  origin: resolveCorsOrigin,
+  allowHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
+  allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  credentials: true,
+  maxAge: 3600
 }));
 
 app.get('/api/health', (c) => c.json({ ok: true }));
@@ -71,6 +135,10 @@ app.get('/api/register-links/:token', async (c) => {
 });
 
 app.post('/api/register-links/:token/register', async (c) => {
+  // 限流：每个 IP 每分钟最多 5 次注册尝试，防止 invite token 爆破
+  const limited = await enforceRateLimit(c, 'register', clientIp(c), { max: 5, windowSeconds: 60 });
+  if (limited) return limited;
+
   const token = String(c.req.param('token') || '').trim();
   const payload = await parseJsonRequest(c.req.raw);
   const username = String(payload.username || '').trim();
@@ -82,6 +150,21 @@ app.post('/api/register-links/:token/register', async (c) => {
   }
   if (!username || !password) {
     return errorResponse('用户名和密码不能为空');
+  }
+
+  const usernameValidation = validateUsername(username);
+  if (!usernameValidation.valid) {
+    return errorResponse(usernameValidation.error);
+  }
+
+  const passwordValidation = validatePassword(password);
+  if (!passwordValidation.valid) {
+    return errorResponse(passwordValidation.error);
+  }
+
+  const displayNameValidation = validateDisplayName(displayName);
+  if (!displayNameValidation.valid) {
+    return errorResponse(displayNameValidation.error);
   }
 
   const inviteQuery = await c.env.DB.prepare(
@@ -105,10 +188,11 @@ app.post('/api/register-links/:token/register', async (c) => {
        display_name,
        password_hash,
        password_salt,
+       password_hash_version,
        registration_invite_id
-     ) VALUES (?, ?, ?, ?, ?)`
+     ) VALUES (?, ?, ?, ?, ?, ?)`
   )
-    .bind(username, displayName, hashed.hash, hashed.salt, Number(invite.id))
+    .bind(username, displayName, hashed.hash, hashed.salt, hashed.version, Number(invite.id))
     .run()
     .catch((error) => {
       if (String(error.message).includes('UNIQUE')) {
@@ -117,7 +201,7 @@ app.post('/api/register-links/:token/register', async (c) => {
       throw error;
     });
 
-  await c.env.DB.prepare(
+  const consume = await c.env.DB.prepare(
     `UPDATE registration_invites
      SET consumed_by_user_id = ?,
          consumed_at = CURRENT_TIMESTAMP
@@ -128,8 +212,52 @@ app.post('/api/register-links/:token/register', async (c) => {
     .bind(Number(result.meta.last_row_id), Number(invite.id))
     .run();
 
+  if (!consume.meta?.changes) {
+    await c.env.DB.prepare(
+      `UPDATE users
+       SET username = username || '#revoked-' || id,
+           deleted_at = CURRENT_TIMESTAMP,
+           is_disabled = 1
+       WHERE id = ?`
+    )
+      .bind(Number(result.meta.last_row_id))
+      .run();
+    return errorResponse('注册链接已失效', 400);
+  }
+
   return c.json({ ok: true });
 });
+
+const SESSION_COOKIE_NAME = 'cfchat_token';
+
+function isSecureRequest(c) {
+  // CDN 后 c.req.url 协议会被改写为 https；保险起见同时检查 forwarded header
+  if (new URL(c.req.url).protocol === 'https:') {
+    return true;
+  }
+  const forwarded = (c.req.header('x-forwarded-proto') || c.req.header('cf-visitor') || '').toLowerCase();
+  return forwarded.includes('https');
+}
+
+function sessionCookieOptions(c) {
+  return {
+    httpOnly: true,
+    secure: isSecureRequest(c),
+    sameSite: 'Strict',
+    path: '/',
+    maxAge: 60 * 60 * 24 * 7
+  };
+}
+
+function clearedSessionCookieOptions(c) {
+  return {
+    httpOnly: true,
+    secure: isSecureRequest(c),
+    sameSite: 'Strict',
+    path: '/',
+    maxAge: 0
+  };
+}
 
 app.post('/api/auth/login', async (c) => {
   const payload = await parseJsonRequest(c.req.raw);
@@ -139,20 +267,54 @@ app.post('/api/auth/login', async (c) => {
     return errorResponse('请输入用户名和密码');
   }
 
+  // 限流：以 IP+username 双维度，60s 内最多 8 次失败/尝试，阻止密码爆破。
+  // 注意：此处对所有请求计数（无论是否登录成功），避免攻击者通过试探有效用户。
+  const ip = clientIp(c);
+  const limited = await enforceRateLimit(c, 'login', `${ip}:${username.toLowerCase()}`, {
+    max: 8,
+    windowSeconds: 60
+  });
+  if (limited) return limited;
+
   const user = await getUserByUsername(c.env.DB, username);
   if (!user || Number(user.is_disabled)) {
     return errorResponse('账号或密码错误', 401);
   }
 
-  const valid = await verifyPassword(password, user.password_hash, user.password_salt);
-  if (!valid) {
+  const verifyResult = await verifyPassword(
+    password,
+    user.password_hash,
+    user.password_salt,
+    user.password_hash_version
+  );
+  if (!verifyResult.valid) {
     return errorResponse('账号或密码错误', 401);
   }
 
+  if (verifyResult.needsRehash) {
+    // 异步迁移到当前 PBKDF2 配置；失败仅日志，不影响登录主流程。
+    c.executionCtx.waitUntil(
+      rehashPasswordOnLogin(c.env.DB, Number(user.id), password).catch((error) => {
+        console.error('Failed to rehash password on login', error);
+      })
+    );
+  }
+
   const session = await createSession(c.env, user);
+
+  // HttpOnly Cookie：path '/' 确保所有路径接收，Secure 在 CDN https 部署上启用，
+  // SameSite=Strict 防 CSRF（同源 SPA 内 fetch 不受影响）。
+  c.cookie(SESSION_COOKIE_NAME, session.token, sessionCookieOptions(c));
+
+  // 返回会话信息，但不返回令牌（令牌在 cookie 中）
   return c.json({
-    token: session.token,
-    session
+    session: {
+      userId: session.userId,
+      username: session.username,
+      displayName: session.displayName,
+      avatarUrl: session.avatarUrl,
+      isAdmin: session.isAdmin
+    }
   });
 });
 
@@ -188,6 +350,10 @@ app.get('/api/auth/session', async (c) => {
 app.post('/api/auth/logout', async (c) => {
   const session = c.get('session');
   await deleteSession(c.env, session.token);
+
+  // 必须使用与 set 时一致的 path/secure/sameSite，否则浏览器认为是不同 cookie
+  c.cookie(SESSION_COOKIE_NAME, '', clearedSessionCookieOptions(c));
+
   return c.json({ ok: true });
 });
 
@@ -200,8 +366,20 @@ app.post('/api/auth/change-password', async (c) => {
     return errorResponse('请填写完整密码');
   }
 
+  // 限流：按 userId，10 分钟内最多 5 次，防止已登录账户被盗后批量改密。
+  const limited = await enforceRateLimit(c, 'change-password', String(session.userId), {
+    max: 5,
+    windowSeconds: 600
+  });
+  if (limited) return limited;
+
+  const passwordValidation = validatePassword(newPassword);
+  if (!passwordValidation.valid) {
+    return errorResponse(passwordValidation.error);
+  }
+
   const user = await c.env.DB.prepare(
-    `SELECT password_hash, password_salt
+    `SELECT password_hash, password_salt, password_hash_version
      FROM users
      WHERE id = ?
        AND deleted_at IS NULL
@@ -214,12 +392,13 @@ app.post('/api/auth/change-password', async (c) => {
     return errorResponse('用户不存在', 404);
   }
 
-  const valid = await verifyPassword(
+  const verifyResult = await verifyPassword(
     currentPassword,
     user.results[0].password_hash,
-    user.results[0].password_salt
+    user.results[0].password_salt,
+    user.results[0].password_hash_version
   );
-  if (!valid) {
+  if (!verifyResult.valid) {
     return errorResponse('当前密码不正确', 400);
   }
 
@@ -228,12 +407,13 @@ app.post('/api/auth/change-password', async (c) => {
     `UPDATE users
      SET password_hash = ?,
           password_salt = ?,
+          password_hash_version = ?,
           session_version = session_version + 1,
           updated_at = CURRENT_TIMESTAMP
      WHERE id = ?
        AND deleted_at IS NULL`
   )
-    .bind(hashed.hash, hashed.salt, session.userId)
+    .bind(hashed.hash, hashed.salt, hashed.version, session.userId)
     .run();
 
   const nextSession = {
@@ -250,8 +430,10 @@ app.patch('/api/me/profile', async (c) => {
   const payload = await parseJsonRequest(c.req.raw);
   const displayName = String(payload.displayName || session.displayName).trim();
   const avatarKey = payload.avatarKey ? String(payload.avatarKey) : null;
-  if (!displayName) {
-    return errorResponse('显示名称不能为空');
+
+  const displayNameValidation = validateDisplayName(displayName);
+  if (!displayNameValidation.valid) {
+    return errorResponse(displayNameValidation.error);
   }
 
   await c.env.DB.prepare(
@@ -420,6 +602,10 @@ app.get('/api/bootstrap', async (c) => {
   });
 });
 
+app.get('/api/moderation/blocked-words', async (c) => {
+  return c.json({ words: await getBlockedWords(c.env.DB) });
+});
+
 app.use('/api/admin/*', adminMiddleware);
 
 registerMessageRoutes(app);
@@ -478,4 +664,4 @@ export default {
     ctx.waitUntil(runScheduledGc(env));
   }
 };
-export { ChannelRoom, Scheduler };
+export { ChannelRoom };
