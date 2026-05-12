@@ -1,17 +1,11 @@
 import { reactive } from 'vue';
 import api from './api.js';
-import {
-  addAuthInvalidListener,
-  clearStoredToken,
-  getStoredToken,
-  setStoredToken
-} from './auth-storage.js';
+import { addAuthInvalidListener, purgeLegacyAuthStorage } from './auth-storage.js';
 
 const DEFAULT_SITE_ICON_URL = '/logo.svg';
 
 const state = reactive({
   ready: false,
-  token: getStoredToken(),
   session: null,
   site: {
     siteName: 'Edgechat',
@@ -20,8 +14,7 @@ const state = reactive({
 });
 
 function clearAuthState() {
-  clearStoredToken();
-  state.token = '';
+  purgeLegacyAuthStorage();
   state.session = null;
 }
 
@@ -58,12 +51,10 @@ async function initialize() {
     return;
   }
 
-  await loadSite();
+  // 清理任何遗留的 localStorage token（H3 迁移），无副作用
+  purgeLegacyAuthStorage();
 
-  if (!state.token) {
-    state.ready = true;
-    return;
-  }
+  await loadSite();
 
   try {
     const payload = await api.session();
@@ -77,17 +68,13 @@ async function initialize() {
 
 async function login(credentials) {
   const payload = await api.login(credentials);
-  state.token = payload.token;
   state.session = payload.session;
   state.ready = true;
-  setStoredToken(payload.token);
 }
 
 async function logout() {
   try {
-    if (state.token) {
-      await api.logout();
-    }
+    await api.logout();
   } finally {
     clearAuthState();
   }
@@ -114,9 +101,6 @@ if (typeof window !== 'undefined') {
 export default {
   get ready() {
     return state.ready;
-  },
-  get token() {
-    return state.token;
   },
   get session() {
     return state.session;

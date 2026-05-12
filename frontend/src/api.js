@@ -1,19 +1,16 @@
-import { dispatchAuthInvalid, getStoredToken } from './auth-storage.js';
+import { dispatchAuthInvalid } from './auth-storage.js';
 
 const API_PREFIX = '/api';
 
 function buildHeaders(extra = {}) {
-  const headers = { ...extra };
-  const token = getStoredToken();
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-  return headers;
+  return { ...extra };
 }
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_PREFIX}${path}`, {
     ...options,
+    // 包含凭证以确保 HttpOnly Cookie 被发送
+    credentials: 'include',
     headers: buildHeaders(options.headers),
     body:
       options.body instanceof FormData || typeof options.body === 'string'
@@ -109,6 +106,18 @@ export default {
       method: 'DELETE'
     });
   },
+  muteChannelMember(channelId, userId, minutes) {
+    return request(`/channels/${channelId}/members/${userId}/mute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: { minutes }
+    });
+  },
+  unmuteChannelMember(channelId, userId) {
+    return request(`/channels/${channelId}/members/${userId}/mute`, {
+      method: 'DELETE'
+    });
+  },
   deleteOwnedChannel(channelId) {
     return request(`/channels/${channelId}`, {
       method: 'DELETE'
@@ -127,6 +136,9 @@ export default {
       query.set('before', String(before));
     }
     return request(`/messages?${query.toString()}`);
+  },
+  getBlockedWords() {
+    return request('/moderation/blocked-words');
   },
   openDm(userId) {
     return request('/dm/open', {
@@ -147,10 +159,8 @@ export default {
     });
   },
   getRoomWebSocketUrl(kind, roomId) {
-    const token = getStoredToken();
     const url = new URL(`/api/ws/${kind}/${roomId}`, window.location.origin);
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-    url.searchParams.set('token', token || '');
     return url.toString();
   },
   adminUsers() {
@@ -182,6 +192,16 @@ export default {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: payload
+    });
+  },
+  getAdminBlockedWords() {
+    return request('/admin/blocked-words');
+  },
+  updateAdminBlockedWords(words) {
+    return request('/admin/blocked-words', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: { words }
     });
   },
   createUser(payload) {

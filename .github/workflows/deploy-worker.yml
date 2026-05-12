@@ -53,12 +53,12 @@ jobs:
         if: steps.ensure_resources.outputs.d1_created == 'true'
         run: npx wrangler d1 execute ${{ steps.ensure_resources.outputs.d1_database_name }} --remote --file worker/schema.sql --config wrangler.ci.toml
 
-      - name: Generate admin bootstrap SQL (optional)
-        if: env.EDGECHAT_ADMIN_USERNAME != '' && env.EDGECHAT_ADMIN_PASSWORD != ''
+      - name: Generate admin bootstrap SQL (first creation only)
+        if: steps.ensure_resources.outputs.d1_created == 'true' && env.EDGECHAT_ADMIN_USERNAME != '' && env.EDGECHAT_ADMIN_PASSWORD != ''
         run: node .github/scripts/generate-admin-bootstrap-sql.mjs
 
-      - name: Ensure admin user (optional)
-        if: env.EDGECHAT_ADMIN_USERNAME != '' && env.EDGECHAT_ADMIN_PASSWORD != ''
+      - name: Bootstrap initial admin user (first creation only)
+        if: steps.ensure_resources.outputs.d1_created == 'true' && env.EDGECHAT_ADMIN_USERNAME != '' && env.EDGECHAT_ADMIN_PASSWORD != ''
         run: npx wrangler d1 execute ${{ steps.ensure_resources.outputs.d1_database_name }} --remote --file .tmp/edgechat-admin-upsert.sql --config wrangler.ci.toml
 
       - name: Deploy worker

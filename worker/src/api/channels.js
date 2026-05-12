@@ -3,10 +3,13 @@ import {
   getChannelById,
   getChannelMembership,
   listChannelMembers,
-  requireAccessibleRoom
+  requireAccessibleRoom,
+  setChannelMemberMute
 } from '../db.js';
 import { ApiError } from '../errors.js';
 import { errorResponse, parseJsonRequest, publicFileUrl } from '../utils.js';
+import { toMuteUntil } from '../moderation.js';
+import { validateChannelDescription, validateChannelName } from '../validation.js';
 
 function mapChannelRow(row) {
   return {
@@ -125,6 +128,16 @@ export function registerChannelRoutes(app) {
       return errorResponse('群组名称不能为空');
     }
 
+    const nameValidation = validateChannelName(name);
+    if (!nameValidation.valid) {
+      return errorResponse(nameValidation.error);
+    }
+
+    const descriptionValidation = validateChannelDescription(description);
+    if (!descriptionValidation.valid) {
+      return errorResponse(descriptionValidation.error);
+    }
+
     if (!['public', 'private'].includes(kind)) {
       return errorResponse('群组类型无效');
     }
@@ -135,7 +148,7 @@ export function registerChannelRoutes(app) {
       `INSERT INTO channels (name, description, kind, created_by)
        VALUES (?, ?, ?, ?)`
     )
-      .bind(name, description, kind, session.userId)
+      .bind(name, descriptionValidation.sanitized, kind, session.userId)
       .run()
       .catch((error) => {
         if (String(error.message).includes('UNIQUE')) {
@@ -170,7 +183,7 @@ export function registerChannelRoutes(app) {
       channel: {
         id: channelId,
         name,
-        description,
+        description: descriptionValidation.sanitized,
         avatarKey: '',
         avatarUrl: '',
         kind,
@@ -260,6 +273,13 @@ export function registerChannelRoutes(app) {
 
     if (name !== undefined && !name) {
       return errorResponse('群组名称不能为空');
+    }
+
+    if (name !== undefined) {
+      const nameValidation = validateChannelName(name);
+      if (!nameValidation.valid) {
+        return errorResponse(nameValidation.error);
+      }
     }
 
     const management = await canManageChannel(c.env.DB, channelId, session.userId, session.isAdmin);
@@ -367,6 +387,58 @@ export function registerChannelRoutes(app) {
       .bind(channelId, userId)
       .run();
 
+    return c.json({
+      ok: true,
+      members: await listChannelMembers(c.env.DB, channelId)
+    });
+  });
+
+  app.post('/api/channels/:channelId/members/:userId/mute', async (c) => {
+    const session = c.get('session');
+    const channelId = Number(c.req.param('channelId'));
+    const userId = Number(c.req.param('userId'));
+    const payload = await parseJsonRequest(c.req.raw);
+    const management = await canManageChannel(c.env.DB, channelId, session.userId, session.isAdmin);
+    if (!management) {
+      return errorResponse('只有群主或管理员可以禁言成员', 403);
+    }
+
+    if (userId === session.userId) {
+      return errorResponse('不能禁言自己');
+    }
+
+    const targetMembership = await getChannelMembership(c.env.DB, channelId, userId);
+    if (!targetMembership) {
+      return errorResponse('成员不存在', 404);
+    }
+    if (targetMembership.role === 'owner') {
+      return errorResponse('不能禁言群主');
+    }
+
+    let mutedUntil;
+    try {
+      mutedUntil = toMuteUntil(payload.minutes || 30);
+    } catch (error) {
+      return errorResponse(error.message);
+    }
+
+    await setChannelMemberMute(c.env.DB, channelId, userId, mutedUntil);
+    return c.json({
+      ok: true,
+      members: await listChannelMembers(c.env.DB, channelId)
+    });
+  });
+
+  app.delete('/api/channels/:channelId/members/:userId/mute', async (c) => {
+    const session = c.get('session');
+    const channelId = Number(c.req.param('channelId'));
+    const userId = Number(c.req.param('userId'));
+    const management = await canManageChannel(c.env.DB, channelId, session.userId, session.isAdmin);
+    if (!management) {
+      return errorResponse('只有群主或管理员可以解除禁言', 403);
+    }
+
+    await setChannelMemberMute(c.env.DB, channelId, userId, null);
     return c.json({
       ok: true,
       members: await listChannelMembers(c.env.DB, channelId)

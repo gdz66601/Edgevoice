@@ -1,4 +1,5 @@
 import { pickAttachment, publicFileUrl } from './utils.js';
+import { validateMessage } from './validation.js';
 
 function toNullableNumber(value) {
   const number = Number(value);
@@ -15,6 +16,20 @@ export async function getUserByUsername(db, username) {
        LIMIT 1`
     )
     .bind(username)
+    .all();
+
+  return results[0] || null;
+}
+
+export async function getUserById(db, userId) {
+  const { results } = await db
+    .prepare(
+      `SELECT *
+       FROM users
+       WHERE id = ?
+       LIMIT 1`
+    )
+    .bind(Number(userId))
     .all();
 
   return results[0] || null;
@@ -173,6 +188,7 @@ export async function listChannelMembers(db, channelId) {
       `SELECT
          cm.user_id,
          cm.role,
+         cm.muted_until,
          cm.joined_at,
          u.username,
          u.display_name,
@@ -192,8 +208,37 @@ export async function listChannelMembers(db, channelId) {
     displayName: row.display_name,
     avatarUrl: row.avatar_key ? publicFileUrl(row.avatar_key) : '',
     role: row.role,
+    mutedUntil: row.muted_until || null,
     joinedAt: row.joined_at
   }));
+}
+
+export async function getChannelMemberModeration(db, channelId, userId) {
+  const { results } = await db
+    .prepare(
+      `SELECT role, muted_until
+       FROM channel_members
+       WHERE channel_id = ?
+         AND user_id = ?
+       LIMIT 1`
+    )
+    .bind(Number(channelId), Number(userId))
+    .all();
+
+  return results[0] || null;
+}
+
+export async function setChannelMemberMute(db, channelId, userId, mutedUntil) {
+  await db
+    .prepare(
+      `UPDATE channel_members
+       SET muted_until = ?
+       WHERE channel_id = ?
+         AND user_id = ?
+         AND role != 'owner'`
+    )
+    .bind(mutedUntil || null, Number(channelId), Number(userId))
+    .run();
 }
 
 export async function listMessages(db, roomId, before = null, limit = 30) {
@@ -234,7 +279,14 @@ export async function listMessages(db, roomId, before = null, limit = 30) {
 
 export async function insertMessage(db, { channelId, senderId, content, attachment }) {
   const cleanAttachment = pickAttachment(attachment);
-  const cleanContent = String(content || '').trim();
+
+  // 验证和清理消息内容（防止 XSS）
+  const validation = validateMessage(content || '');
+  if (!validation.valid) {
+    throw new Error(validation.error);
+  }
+
+  const cleanContent = validation.sanitized;
 
   if (!cleanContent && !cleanAttachment) {
     throw new Error('Message content cannot be empty');
@@ -317,8 +369,67 @@ export function mapMessage(row) {
 
 export async function ensureDmChannel(db, actorId, targetUserId) {
   const dmKey = [Number(actorId), Number(targetUserId)].sort((a, b) => a - b).join(':');
-  const existing = await db
-    .prepare(
+  const ensureMembers = async (channelId) => {
+    await db.batch([
+      db.prepare(
+        `INSERT OR IGNORE INTO channel_members (channel_id, user_id, role, invited_by)
+         VALUES (?, ?, 'member', ?)`
+      ).bind(channelId, Number(actorId), Number(actorId)),
+      db.prepare(
+        `INSERT OR IGNORE INTO channel_members (channel_id, user_id, role, invited_by)
+         VALUES (?, ?, 'member', ?)`
+      ).bind(channelId, Number(targetUserId), Number(actorId))
+    ]);
+  };
+
+  try {
+    // 使用 INSERT OR IGNORE + SELECT 的原子操作处理并发
+    // 首先尝试插入，如果 dm_key 已存在则忽略
+    const insertResult = await db.prepare(
+      `INSERT OR IGNORE INTO channels (name, description, kind, dm_key, created_by)
+       VALUES (?, '', 'dm', ?, ?)
+       RETURNING id, name, dm_key`
+    )
+      .bind(dmKey, dmKey, Number(actorId))
+      .first();
+
+    // 获取频道 ID（可能是新插入的，也可能是已存在的）
+    let channelId;
+    if (insertResult) {
+      channelId = insertResult.id;
+    } else {
+      // 插入被忽略（因为 dm_key 已存在），查询现有频道
+      const existing = await db.prepare(
+        `SELECT id, name, dm_key
+         FROM channels
+         WHERE kind = 'dm'
+           AND dm_key = ?
+           AND deleted_at IS NULL
+         LIMIT 1`
+      )
+        .bind(dmKey)
+        .first();
+
+      if (!existing) {
+        throw new Error('Failed to ensure DM channel');
+      }
+
+      channelId = existing.id;
+      await ensureMembers(channelId);
+      return existing;
+    }
+
+    // 添加成员（使用 INSERT OR IGNORE 处理并发）
+    await ensureMembers(channelId);
+
+    return {
+      id: channelId,
+      name: dmKey,
+      dm_key: dmKey
+    };
+  } catch (error) {
+    // 如果插入失败（例如 UNIQUE 约束冲突），尝试查询现有频道
+    const existing = await db.prepare(
       `SELECT id, name, dm_key
        FROM channels
        WHERE kind = 'dm'
@@ -326,40 +437,14 @@ export async function ensureDmChannel(db, actorId, targetUserId) {
          AND deleted_at IS NULL
        LIMIT 1`
     )
-    .bind(dmKey)
-    .all();
+      .bind(dmKey)
+      .first();
 
-  if (existing.results[0]) {
-    return existing.results[0];
+    if (existing) {
+      await ensureMembers(existing.id);
+      return existing;
+    }
+
+    throw error;
   }
-
-  const created = await db
-    .prepare(
-      `INSERT INTO channels (name, description, kind, dm_key, created_by)
-       VALUES (?, '', 'dm', ?, ?)`
-    )
-    .bind(dmKey, dmKey, Number(actorId))
-    .run();
-
-  const channelId = created.meta.last_row_id;
-  await db.batch([
-    db
-      .prepare(
-        `INSERT OR IGNORE INTO channel_members (channel_id, user_id, role, invited_by)
-         VALUES (?, ?, 'member', ?)`
-      )
-      .bind(channelId, Number(actorId), Number(actorId)),
-    db
-      .prepare(
-        `INSERT OR IGNORE INTO channel_members (channel_id, user_id, role, invited_by)
-         VALUES (?, ?, 'member', ?)`
-      )
-      .bind(channelId, Number(targetUserId), Number(actorId))
-  ]);
-
-  return {
-    id: channelId,
-    name: dmKey,
-    dm_key: dmKey
-  };
 }

@@ -167,6 +167,17 @@ async function markR2RetryFailure(db, key, retryCount, delayMinutes, errorMessag
 }
 
 async function deleteRowsByIds(db, tableName, columnName, ids, extraSql = '') {
+  // 白名单验证，防止 SQL 注入
+  const ALLOWED_TABLES = ['messages', 'channels', 'users', 'channel_members', 'registration_invites', 'audit_logs', 'r2_delete_queue'];
+  const ALLOWED_COLUMNS = ['id', 'channel_id', 'sender_id', 'user_id', 'invite_id'];
+
+  if (!ALLOWED_TABLES.includes(tableName)) {
+    throw new Error(`Invalid table name: ${tableName}`);
+  }
+  if (!ALLOWED_COLUMNS.includes(columnName)) {
+    throw new Error(`Invalid column name: ${columnName}`);
+  }
+
   if (!ids.length) {
     return 0;
   }
@@ -182,6 +193,13 @@ async function deleteRowsByIds(db, tableName, columnName, ids, extraSql = '') {
 }
 
 async function collectMessageAttachmentsByColumn(db, columnName, ids) {
+  // 白名单验证，防止 SQL 注入
+  const ALLOWED_COLUMNS = ['id', 'channel_id', 'sender_id'];
+
+  if (!ALLOWED_COLUMNS.includes(columnName)) {
+    throw new Error(`Invalid column name: ${columnName}`);
+  }
+
   if (!ids.length) {
     return [];
   }
@@ -432,6 +450,11 @@ async function clearUserReferences(env, userIds) {
       `UPDATE channel_members
        SET invited_by = NULL
        WHERE invited_by IN (${placeholders(userIds.length)})`
+    ).bind(...binds),
+    env.DB.prepare(
+      `UPDATE admin_audit_log
+       SET admin_user_id = NULL
+       WHERE admin_user_id IN (${placeholders(userIds.length)})`
     ).bind(...binds)
   ]);
 }

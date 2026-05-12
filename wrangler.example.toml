@@ -33,13 +33,13 @@ bucket_name = "cfchat-files"
 name = "CHANNEL_ROOM"
 class_name = "ChannelRoom"
 
-[[durable_objects.bindings]]
-name = "SCHEDULER"
-class_name = "Scheduler"
-
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["ChannelRoom", "Scheduler"]
+
+[[migrations]]
+tag = "v2"
+deleted_classes = ["Scheduler"]
 
 [assets]
 directory = "./frontend/dist"
